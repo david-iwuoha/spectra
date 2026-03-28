@@ -8,6 +8,7 @@ import torch
 import segmentation_models_pytorch as smp
 from datetime import datetime
 import uuid
+import resend
 
 app = FastAPI(title="Spectra API", version="1.0.0")
 
@@ -122,6 +123,10 @@ def run_scan_job(scan_id: str):
     detections.append(result)
     print(f"Scan {scan_id} complete — confidence: {result['confidence']}% | area: {area_km2} km²")
 
+     # Fire alert if confidence above threshold
+    if confidence > 0.5 and result["detected"]:
+        from backend.alerts import send_spill_alert
+        send_spill_alert(result)
 
 @app.get("/")
 def root():
