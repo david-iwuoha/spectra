@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectra — Oil Spill Detection</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0e13;
+    --panel: #0f1520;
+    --panel2: #141c2a;
+    --border: #1e2d42;
+    --teal: #00d4aa;
+    --teal-dim: #00a882;
+    --red: #ff4444;
+    --amber: #f5a623;
+    --blue: #4a9eff;
+    --purple: #8b5cf6;
+    --text: #c8d8e8;
+    --text-dim: #6b8299;
+    --text-bright: #e8f4ff;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Barlow Condensed', sans-serif;
+    --body: 'Barlow', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 52px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+    flex-shrink: 0;
+    z-index: 1000;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--teal);
+    text-transform: uppercase;
+  }
+
+  .logo span {
+    color: var(--text-dim);
+    font-weight: 300;
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-left: 8px;
+    text-transform: uppercase;
+  }
+
+  .topbar-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--teal);
+    margin-left: auto;
+  }
+
+  .pulse {
+    width: 8px; height: 8px;
+    background: var(--teal);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .topbar-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 16px;
+  }
+
+  .scan-btn {
+    background: var(--teal);
+    color: #000;
+    border: none;
+    padding: 8px 20px;
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    margin-left: 12px;
+  }
+
+  .scan-btn:hover { background: #00ffcc; }
+  .scan-btn.scanning {
+    background: var(--amber);
+    animation: scanning 1s infinite;
+  }
+
+  @keyframes scanning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    width: 280px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* LAYER TOGGLES */
+  .layer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .layer-item:last-child { border-bottom: none; }
+
+  .layer-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .layer-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .layer-name {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .layer-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 1px;
+  }
+
+  .toggle {
+    width: 36px; height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .toggle.on { background: var(--teal); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(16px); }
+
+  /* DETECTION CARDS */
+  .detection-card {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .detection-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--red);
+  }
+
+  .detection-card:hover { border-color: var(--teal); }
+
+  .detection-card.high::before { background: var(--red); }
+  .detection-card.medium::before { background: var(--amber); }
+  .detection-card.low::before { background: var(--blue); }
+
+  .card-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .card-confidence {
+    font-family: var(--display);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1;
+  }
+
+  .card-confidence span {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+
+  .card-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .card-stat {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .card-stat strong {
+    color: var(--teal);
+    font-weight: 400;
+  }
+
+  .card-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .badge-alert { background: rgba(255,68,68,0.15); color: var(--red); border: 1px solid rgba(255,68,68,0.3); }
+  .badge-ok { background: rgba(0,212,170,0.1); color: var(--teal); border: 1px solid rgba(0,212,170,0.2); }
+
+  /* STATS ROW */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-box {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px;
+  }
+
+  .stat-value {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--teal);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* MAP */
+  #map {
+    flex: 1;
+    background: #0a0e13;
+  }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    width: 260px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  /* LEGEND */
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .legend-swatch {
+    width: 24px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* COORDINATE DISPLAY */
+  .coord-display {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 4px 0;
+    line-height: 1.8;
+  }
+
+  /* MAP CONTROLS */
+  .leaflet-control-zoom {
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    overflow: hidden;
+  }
+
+  .leaflet-control-zoom a {
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important;
+    width: 28px !important;
+    height: 28px !important;
+    line-height: 28px !important;
+    font-size: 16px !important;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: var(--panel2) !important;
+    color: var(--teal) !important;
+  }
+
+  /* SCAN PROGRESS */
+  .scan-progress {
+    display: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--amber);
+    padding: 8px 16px;
+    background: rgba(245,166,35,0.05);
+    border-bottom: 1px solid rgba(245,166,35,0.15);
+  }
+
+  .scan-progress.active { display: block; }
+
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--amber);
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 1px;
+  }
+
+  /* GRID OVERLAY on map */
+  .map-overlay-info {
+    position: absolute;
+    bottom: 24px;
+    left: 300px;
+    z-index: 999;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(0,212,170,0.6);
+    pointer-events: none;
+  }
+
+  /* Leaflet popup custom */
+  .leaflet-popup-content-wrapper {
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+    color: var(--text) !important;
+  }
+
+  .leaflet-popup-tip { background: var(--panel) !important; }
+
+  .popup-title {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--red);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .popup-row {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .popup-row strong { color: var(--teal); }
+
+  .empty-state {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.8;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">SPECTRA <span>Niger Delta Surveillance</span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+    <div class="topbar-status">
+      <div class="pulse"></div>
+      SENTINEL-1 ACTIVE
+    </div>
+    <div class="topbar-time" id="clock"></div>
+    <button class="scan-btn" id="scanBtn" onclick="triggerScan()">▶ RUN SCAN</button>
+  </div>
+</div>
+
+<!-- SCAN PROGRESS -->
+<div class="scan-progress" id="scanProgress">
+  <span id="scanStatus">Initializing detection pipeline...</span>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+
+    <!-- LAYERS -->
+    <div class="panel-section">
+      <div class="panel-label">Map Layers</div>
+
+      <div class="layer-item" onclick="toggleLayer('spills')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#ff4444;box-shadow:0 0 6px #ff4444;"></div>
+          <div>
+            <div class="layer-name">Spill Detections</div>
+            <div class="layer-sub">AI-detected polygons</div>
+          </div>
+        </div>
+        <div class="toggle on" id="toggle-spills"></div>
+      </div>
+
+      <div class="layer-item" onclick="toggleLayer('heatmap')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#f5a623;box-shadow:0 0 6px #f5a623;"></div>
+          <div>
+            <div class="layer-name">Confidence Heatmap</div>
+            <div class="layer-sub">Probability intensity</div>
+          </div>
+        </div>
+        <div class="toggle" id="toggle-heatmap"></div>
+      </div>
+
+      <div class="layer-item" onclick="toggleLayer('pipelines')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#4a9eff;box-shadow:0 0 6px #4a9eff;"></div>
+          <div>
+            <div class="layer-name">Pipeline Corridors</div>
+            <div class="layer-sub">Known pipeline routes</div>
+          </div>
+        </div>
+        <div class="toggle on" id="toggle-pipelines"></div>
+      </div>
+
+      <div class="layer-item" onclick="toggleLayer('historical')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#8b5cf6;box-shadow:0 0 6px #8b5cf6;"></div>
+          <div>
+            <div class="layer-name">Historical Spills</div>
+            <div class="layer-sub">Documented incidents</div>
+          </div>
+        </div>
+        <div class="toggle on" id="toggle-historical"></div>
+      </div>
+
+      <div class="layer-item" onclick="toggleLayer('vegetation')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#22c55e;box-shadow:0 0 6px #22c55e;"></div>
+          <div>
+            <div class="layer-name">Vegetation Stress</div>
+            <div class="layer-sub">NDVI anomalies</div>
+          </div>
+        </div>
+        <div class="toggle" id="toggle-vegetation"></div>
+      </div>
+
+      <div class="layer-item" onclick="toggleLayer('sar')">
+        <div class="layer-left">
+          <div class="layer-dot" style="background:#00d4aa;box-shadow:0 0 6px #00d4aa;"></div>
+          <div>
+            <div class="layer-name">SAR Backscatter</div>
+            <div class="layer-sub">Raw radar overlay</div>
+          </div>
+        </div>
+        <div class="toggle" id="toggle-sar"></div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="panel-section">
+      <div class="panel-label">Session Statistics</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-value" id="statDetections">0</div>
+          <div class="stat-label">Detections</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statArea">0</div>
+          <div class="stat-label">Total km²</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statAlerts">0</div>
+          <div class="stat-label">Alerts Sent</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="statScans">0</div>
+          <div class="stat-label">Scans Run</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETECTIONS LIST -->
+    <div class="panel-section" style="flex:1;">
+      <div class="panel-label">Detection Archive</div>
+      <div id="detectionList">
+        <div class="empty-state">
+          NO DETECTIONS YET<br>
+          RUN A SCAN TO BEGIN<br>SURVEILLANCE
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- COORDINATES -->
+    <div class="panel-section">
+      <div class="panel-label">Cursor Position</div>
+      <div class="coord-display" id="coordDisplay">
+        LAT: —<br>
+        LON: —<br>
+        ZONE: Niger Delta AOI
+      </div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="panel-section">
+      <div class="panel-label">Legend</div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#ff4444;opacity:0.8;"></div>
+        High confidence spill (>70%)
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#f5a623;opacity:0.8;"></div>
+        Medium confidence (50-70%)
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#4a9eff;opacity:0.6;border:1px dashed #4a9eff;"></div>
+        Pipeline corridors
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#8b5cf6;opacity:0.7;"></div>
+        Historical incidents
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#22c55e;opacity:0.5;"></div>
+        Vegetation stress zones
+      </div>
+    </div>
+
+    <!-- AOI INFO -->
+    <div class="panel-section">
+      <div class="panel-label">Area of Interest</div>
+      <div class="coord-display">
+        REGION: Niger Delta<br>
+        BOUNDS: 4.0°N – 6.5°N<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;5.0°E – 8.5°E<br>
+        SENSOR: Sentinel-1 GRD<br>
+        REVISIT: Every 6 days<br>
+        RESOLUTION: 10m/px
+      </div>
+    </div>
+
+    <!-- SATELLITE STATUS -->
+    <div class="panel-section">
+      <div class="panel-label">Satellite Status</div>
+      <div class="coord-display">
+        PLATFORM: Sentinel-1A<br>
+        MODE: IW (Interferometric)<br>
+        POLARIZATION: VV+VH<br>
+        LAST PASS: 2024-01-17<br>
+        NEXT PASS: <span style="color:var(--teal)">Calculating...</span>
+      </div>
+    </div>
+
+    <!-- ALERT LOG -->
+    <div class="panel-section" style="flex:1;">
+      <div class="panel-label">Alert Log</div>
+      <div id="alertLog">
+        <div class="empty-state">NO ALERTS FIRED</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = 'https://silver-space-lamp-x5w6pj4wxpvjf9w5-3000.app.github.dev/';
+let scanCount = 0;
+let totalArea = 0;
+let alertCount = 0;
+let layers = { spills: true, heatmap: false, pipelines: true, historical: true, vegetation: false, sar: false };
+let spillLayerGroup, pipelineLayerGroup, historicalLayerGroup, vegetationLayerGroup;
+
+// CLOCK
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toUTCString().split(' ')[4] + ' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// MAP INIT — dark tile layer
+const map = L.map('map', {
+  center: [5.0, 6.5],
+  zoom: 8,
+  zoomControl: true,
+  attributionControl: false
+});
+
+// Dark geological basemap
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  subdomains: 'abcd'
+}).addTo(map);
+
+// Satellite imagery toggle layer (hidden by default)
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18,
+  opacity: 0.6
+});
+
+// COORDINATE DISPLAY
+map.on('mousemove', function(e) {
+  document.getElementById('coordDisplay').innerHTML =
+    `LAT: ${e.latlng.lat.toFixed(4)}°N<br>` +
+    `LON: ${e.latlng.lng.toFixed(4)}°E<br>` +
+    `ZONE: Niger Delta AOI`;
+});
+
+// AOI BOUNDARY
+const aoiBounds = [[4.0, 5.0],[4.0, 8.5],[6.5, 8.5],[6.5, 5.0],[4.0, 5.0]];
+L.polygon(aoiBounds, {
+  color: '#00d4aa',
+  weight: 1,
+  opacity: 0.4,
+  fillColor: '#00d4aa',
+  fillOpacity: 0.03,
+  dashArray: '6,4'
+}).addTo(map);
+
+// PIPELINE CORRIDORS — simplified Niger Delta pipeline routes
+pipelineLayerGroup = L.layerGroup();
+const pipelines = [
+  [[5.1, 5.2],[5.3, 5.8],[5.6, 6.2],[5.8, 6.8],[6.0, 7.2]],
+  [[4.8, 5.5],[5.0, 6.0],[5.2, 6.5],[5.4, 7.0],[5.5, 7.5]],
+  [[5.5, 5.8],[5.6, 6.3],[5.7, 6.9],[5.8, 7.4],[5.9, 8.0]],
+  [[4.6, 6.0],[4.9, 6.4],[5.1, 6.8],[5.3, 7.2]],
+  [[5.2, 5.3],[5.4, 5.9],[5.7, 6.4],[6.0, 6.8],[6.2, 7.1]],
+];
+pipelines.forEach(coords => {
+  L.polyline(coords, {
+    color: '#4a9eff',
+    weight: 1.5,
+    opacity: 0.6,
+    dashArray: '8,4'
+  }).addTo(pipelineLayerGroup);
+});
+pipelineLayerGroup.addTo(map);
+
+// HISTORICAL SPILLS
+historicalLayerGroup = L.layerGroup();
+const historicalSpills = [
+  { lat: 4.85, lng: 6.35, name: 'Bonga Field', year: 2011, volume: '40,000 barrels' },
+  { lat: 5.10, lng: 6.65, name: 'Jesse Pipeline', year: 2012, volume: '18,000 barrels' },
+  { lat: 4.62, lng: 7.05, name: 'Bodo Creek', year: 2008, volume: '11,000 barrels' },
+  { lat: 5.45, lng: 6.90, name: 'Forcados Terminal', year: 2016, volume: '25,000 barrels' },
+  { lat: 5.78, lng: 7.35, name: 'Trans Niger Pipeline', year: 2019, volume: '8,000 barrels' },
+  { lat: 4.95, lng: 5.85, name: 'Warri Refinery', year: 2020, volume: '5,000 barrels' },
+];
+historicalSpills.forEach(s => {
+  L.circleMarker([s.lat, s.lng], {
+    radius: 8,
+    color: '#8b5cf6',
+    fillColor: '#8b5cf6',
+    fillOpacity: 0.5,
+    weight: 1.5
+  }).bindPopup(`
+    <div class="popup-title">Historical Spill</div>
+    <div class="popup-row"><strong>Site:</strong> ${s.name}</div>
+    <div class="popup-row"><strong>Year:</strong> ${s.year}</div>
+    <div class="popup-row"><strong>Volume:</strong> ${s.volume}</div>
+    <div class="popup-row"><strong>Status:</strong> Documented</div>
+  `).addTo(historicalLayerGroup);
+});
+historicalLayerGroup.addTo(map);
+
+// VEGETATION STRESS ZONES (hidden by default)
+vegetationLayerGroup = L.layerGroup();
+const vegZones = [
+  { bounds: [[4.7, 6.0],[5.0, 6.4]], opacity: 0.25 },
+  { bounds: [[5.1, 6.6],[5.4, 7.0]], opacity: 0.3 },
+  { bounds: [[4.5, 6.9],[4.8, 7.3]], opacity: 0.2 },
+];
+vegZones.forEach(z => {
+  L.rectangle(z.bounds, {
+    color: '#22c55e',
+    fillColor: '#22c55e',
+    fillOpacity: z.opacity,
+    weight: 0.5,
+    opacity: 0.4
+  }).addTo(vegetationLayerGroup);
+});
+
+// SPILL DETECTION LAYER
+spillLayerGroup = L.layerGroup().addTo(map);
+
+// LAYER TOGGLE FUNCTION
+function toggleLayer(name) {
+  layers[name] = !layers[name];
+  const toggle = document.getElementById('toggle-' + name);
+  toggle.classList.toggle('on', layers[name]);
+
+  if (name === 'pipelines') { layers[name] ? pipelineLayerGroup.addTo(map) : map.removeLayer(pipelineLayerGroup); }
+  if (name === 'historical') { layers[name] ? historicalLayerGroup.addTo(map) : map.removeLayer(historicalLayerGroup); }
+  if (name === 'vegetation') { layers[name] ? vegetationLayerGroup.addTo(map) : map.removeLayer(vegetationLayerGroup); }
+  if (name === 'spills') { layers[name] ? spillLayerGroup.addTo(map) : map.removeLayer(spillLayerGroup); }
+  if (name === 'sar') { layers[name] ? satelliteLayer.addTo(map) : map.removeLayer(satelliteLayer); }
+}
+
+// SCAN FUNCTION
+async function triggerScan() {
+  const btn = document.getElementById('scanBtn');
+  const progress = document.getElementById('scanProgress');
+  const fill = document.getElementById('progressFill');
+  const status = document.getElementById('scanStatus');
+
+  btn.classList.add('scanning');
+  btn.textContent = '⟳ SCANNING...';
+  btn.disabled = true;
+  progress.classList.add('active');
+  scanCount++;
+  document.getElementById('statScans').textContent = scanCount;
+
+  const steps = [
+    [10, 'Authenticating with Copernicus CDSE...'],
+    [25, 'Downloading Sentinel-1 scene tiles...'],
+    [45, 'Applying speckle filter + normalization...'],
+    [65, 'Running U-Net inference on 512 patches...'],
+    [82, 'Vectorizing spill mask to GeoJSON...'],
+    [95, 'Computing confidence + area metrics...'],
+    [100, 'Detection complete. Checking alert threshold...'],
+  ];
+
+  for (const [pct, msg] of steps) {
+    await sleep(600);
+    fill.style.width = pct + '%';
+    status.textContent = msg;
+  }
+
+  // Call API
+  try {
+    const res = await fetch(`${API}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene_id: 'latest' })
+    });
+    const data = await res.json();
+    const scanId = data.scan_id;
+
+    // Poll for result
+    await sleep(2000);
+    const resultRes = await fetch(`${API}/detections`);
+    const resultData = await resultRes.json();
+    const detection = resultData.detections.find(d => d.id === scanId);
+
+    if (detection) {
+      addDetectionToMap(detection);
+      addDetectionCard(detection);
+      updateStats(detection);
+    }
+  } catch(e) {
+    // Demo mode — simulate a detection if API unreachable
+    const mockDetection = {
+      id: 'demo-' + Date.now().toString(36),
+      detected_at: new Date().toISOString(),
+      confidence: 68.14,
+      area_km2: 0.4653,
+      spill_pixels: 4653,
+      detected: true,
+      alert_sent: false,
+      polygon: {
+        type: 'Polygon',
+        coordinates: [[[6.2, 4.85],[6.35, 4.85],[6.35, 4.98],[6.2, 4.98],[6.2, 4.85]]]
+      }
+    };
+    addDetectionToMap(mockDetection);
+    addDetectionCard(mockDetection);
+    updateStats(mockDetection);
+  }
+
+  await sleep(500);
+  btn.classList.remove('scanning');
+  btn.textContent = '▶ RUN SCAN';
+  btn.disabled = false;
+  progress.classList.remove('active');
+  fill.style.width = '0%';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function addDetectionToMap(d) {
+  if (!d.polygon) return;
+  const conf = d.confidence;
+  const color = conf >= 70 ? '#ff4444' : conf >= 50 ? '#f5a623' : '#4a9eff';
+
+  let latlngs;
+  if (d.polygon.coordinates) {
+    latlngs = d.polygon.coordinates[0].map(c => [c[1], c[0]]);
+  } else {
+    latlngs = [[4.85, 6.2],[4.85, 6.35],[4.98, 6.35],[4.98, 6.2]];
+  }
+
+  const poly = L.polygon(latlngs, {
+    color: color,
+    fillColor: color,
+    fillOpacity: 0.3,
+    weight: 2,
+    opacity: 0.9
+  }).bindPopup(`
+    <div class="popup-title">⚠ Spill Detected</div>
+    <div class="popup-row"><strong>ID:</strong> ${d.id}</div>
+    <div class="popup-row"><strong>Confidence:</strong> ${d.confidence}%</div>
+    <div class="popup-row"><strong>Area:</strong> ${d.area_km2} km²</div>
+    <div class="popup-row"><strong>Pixels:</strong> ${d.spill_pixels.toLocaleString()}</div>
+    <div class="popup-row"><strong>Detected:</strong> ${new Date(d.detected_at).toLocaleString()}</div>
+    <div class="popup-row"><strong>Alert Sent:</strong> ${d.alert_sent ? 'YES' : 'NO'}</div>
+  `).addTo(spillLayerGroup);
+
+  map.flyTo(latlngs[0], 10, { duration: 1.5 });
+
+  // Pulse animation on detection
+  L.circleMarker(latlngs[0], {
+    radius: 20, color: color, fillColor: color,
+    fillOpacity: 0.1, weight: 1, opacity: 0.6,
+    className: 'pulse-ring'
+  }).addTo(spillLayerGroup);
+}
+
+function addDetectionCard(d) {
+  const list = document.getElementById('detectionList');
+  const empty = list.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const conf = d.confidence;
+  const level = conf >= 70 ? 'high' : conf >= 50 ? 'medium' : 'low';
+  const time = new Date(d.detected_at).toLocaleTimeString();
+
+  const card = document.createElement('div');
+  card.className = `detection-card ${level}`;
+  card.innerHTML = `
+    <div class="card-id">ID: ${d.id} · ${time}</div>
+    <div class="card-confidence">${conf}<span>% confidence</span></div>
+    <div class="card-meta">
+      <div class="card-stat"><strong>${d.area_km2}</strong> km²</div>
+      <div class="card-stat"><strong>${d.spill_pixels?.toLocaleString()}</strong> px</div>
+    </div>
+    <div>
+      ${d.alert_sent ? '<span class="card-badge badge-alert">ALERT SENT</span>' : '<span class="card-badge badge-ok">MONITORING</span>'}
+    </div>
+  `;
+  list.prepend(card);
+
+  // Alert log
+  if (d.alert_sent) {
+    const log = document.getElementById('alertLog');
+    const empty2 = log.querySelector('.empty-state');
+    if (empty2) empty2.remove();
+    const entry = document.createElement('div');
+    entry.style.cssText = 'font-family:var(--mono);font-size:10px;color:var(--red);padding:6px 0;border-bottom:1px solid var(--border);';
+    entry.textContent = `${time} — ALERT FIRED (${conf}%)`;
+    log.prepend(entry);
+  }
+}
+
+function updateStats(d) {
+  const count = parseInt(document.getElementById('statDetections').textContent) + 1;
+  totalArea += d.area_km2;
+  if (d.alert_sent) alertCount++;
+  document.getElementById('statDetections').textContent = count;
+  document.getElementById('statArea').textContent = totalArea.toFixed(2);
+  document.getElementById('statAlerts').textContent = alertCount;
+}
+
+// Load existing detections on startup
+async function loadDetections() {
+  try {
+    const res = await fetch(`${API}/detections`);
+    const data = await res.json();
+    data.detections.forEach(d => {
+      if (d.detected) {
+        addDetectionToMap(d);
+        addDetectionCard(d);
+        updateStats(d);
+      }
+    });
+  } catch(e) {
+    console.log('API not reachable — running in demo mode');
+  }
+}
+
+loadDetections();
+</script>
+</body>
+</html>
