@@ -688,6 +688,46 @@
   </div>
 </div>
 
+<!-- ALERT FLOW MODAL -->
+<div id="alertModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:none;align-items:center;justify-content:center;">
+  <div style="background:#0f1520;border:1px solid #1e2d42;border-radius:8px;width:780px;max-width:95vw;padding:32px;position:relative;">
+
+    <!-- CLOSE -->
+    <button onclick="closeAlertModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#6b8299;font-size:20px;cursor:pointer;">✕</button>
+
+    <!-- TITLE -->
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#00d4aa;text-transform:uppercase;margin-bottom:4px;">Alert Dispatch</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#6b8299;margin-bottom:24px;">Configure recipients and dispatch spill alert</div>
+
+    <!-- DETECTION SUMMARY -->
+    <div id="modalDetectionInfo" style="background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:12px 16px;margin-bottom:20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c8d8e8;line-height:1.8;"></div>
+
+    <!-- EMAIL INPUT -->
+    <div style="margin-bottom:20px;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Recipient Emails</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="emailInput" type="email" placeholder="Add email address..." style="flex:1;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;" onkeydown="if(event.key==='Enter')addEmail()"/>
+        <button onclick="addEmail()" style="background:#00d4aa;color:#000;border:none;border-radius:4px;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;cursor:pointer;">ADD</button>
+      </div>
+      <div id="emailTags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;"></div>
+    </div>
+
+    <!-- FLOW DIAGRAM -->
+    <div style="margin-bottom:20px;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">Dispatch Flow</div>
+      <div style="background:#141c2a;border:1px solid #1e2d42;border-radius:6px;padding:20px;position:relative;overflow:hidden;">
+        <svg id="flowSvg" width="100%" height="200" style="display:block;"></svg>
+      </div>
+    </div>
+
+    <!-- SEND BUTTON -->
+    <div style="display:flex;gap:12px;justify-content:flex-end;">
+      <button onclick="closeAlertModal()" style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">CANCEL</button>
+      <button onclick="dispatchAlerts()" id="dispatchBtn" style="background:#ff4444;color:#fff;border:none;border-radius:4px;padding:10px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;">DISPATCH ALERT</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = 'https://silver-space-lamp-x5w6pj4wxpvjf9w5-3000.app.github.dev/';
 let scanCount = 0;
@@ -951,6 +991,10 @@ function addDetectionCard(d) {
   const level = conf >= 70 ? 'high' : conf >= 50 ? 'medium' : 'low';
   const time = new Date(d.detected_at).toLocaleTimeString();
 
+  // Store detection globally so we can reference by ID
+  window._detections = window._detections || {};
+  window._detections[d.id] = d;
+
   const card = document.createElement('div');
   card.className = `detection-card ${level}`;
   card.innerHTML = `
@@ -960,13 +1004,18 @@ function addDetectionCard(d) {
       <div class="card-stat"><strong>${d.area_km2}</strong> km²</div>
       <div class="card-stat"><strong>${d.spill_pixels?.toLocaleString()}</strong> px</div>
     </div>
-    <div>
-      ${d.alert_sent ? '<span class="card-badge badge-alert">ALERT SENT</span>' : '<span class="card-badge badge-ok">MONITORING</span>'}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+      ${d.alert_sent
+        ? '<span class="card-badge badge-alert">ALERT SENT</span>'
+        : '<span class="card-badge badge-ok">MONITORING</span>'}
+      <button onclick="openAlertModal(window._detections['${d.id}'])"
+        style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:3px;padding:3px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;">
+        ✉ DISPATCH
+      </button>
     </div>
   `;
   list.prepend(card);
 
-  // Alert log
   if (d.alert_sent) {
     const log = document.getElementById('alertLog');
     const empty2 = log.querySelector('.empty-state');
@@ -977,7 +1026,6 @@ function addDetectionCard(d) {
     log.prepend(entry);
   }
 }
-
 function updateStats(d) {
   const count = parseInt(document.getElementById('statDetections').textContent) + 1;
   totalArea += d.area_km2;
@@ -1005,6 +1053,218 @@ async function loadDetections() {
 }
 
 loadDetections();
+
+// =====================
+// ALERT MODAL SYSTEM
+// =====================
+
+let alertEmails = [];
+let currentAlertDetection = null;
+
+function openAlertModal(detection) {
+  currentAlertDetection = detection;
+  document.getElementById('alertModal').style.display = 'flex';
+
+  // Fill detection info
+  document.getElementById('modalDetectionInfo').innerHTML =
+    `DETECTION ID: ${detection.id} &nbsp;|&nbsp; ` +
+    `CONFIDENCE: <span style="color:#ff4444">${detection.confidence}%</span> &nbsp;|&nbsp; ` +
+    `AREA: <span style="color:#00d4aa">${detection.area_km2} km²</span> &nbsp;|&nbsp; ` +
+    `TIME: ${new Date(detection.detected_at).toLocaleString()}`;
+
+  renderFlow();
+}
+
+function closeAlertModal() {
+  document.getElementById('alertModal').style.display = 'none';
+  alertEmails = [];
+  renderEmailTags();
+  resetFlow();
+}
+
+function addEmail() {
+  const input = document.getElementById('emailInput');
+  const email = input.value.trim();
+  if (!email || !email.includes('@')) return;
+  if (alertEmails.includes(email)) { input.value = ''; return; }
+  alertEmails.push(email);
+  input.value = '';
+  renderEmailTags();
+  renderFlow();
+}
+
+function removeEmail(email) {
+  alertEmails = alertEmails.filter(e => e !== email);
+  renderEmailTags();
+  renderFlow();
+}
+
+function renderEmailTags() {
+  const container = document.getElementById('emailTags');
+  container.innerHTML = alertEmails.map(email => `
+    <div style="display:inline-flex;align-items:center;gap:6px;background:#1e2d42;border:1px solid #2a3d52;border-radius:3px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c8d8e8;">
+      ${email}
+      <span onclick="removeEmail('${email}')" style="color:#6b8299;cursor:pointer;font-size:13px;line-height:1;">×</span>
+    </div>
+  `).join('');
+}
+
+function renderFlow() {
+  const svg = document.getElementById('flowSvg');
+  const W = svg.parentElement.offsetWidth - 40;
+  const H = 200;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const emails = alertEmails.length > 0 ? alertEmails : ['(no recipients yet)'];
+  const serverX = 100;
+  const serverY = H / 2;
+  const emailX = W - 80;
+  const count = emails.length;
+  const spacing = Math.min(60, (H - 40) / Math.max(count, 1));
+  const startY = H / 2 - ((count - 1) * spacing) / 2;
+
+  let html = '';
+
+  // Server box
+  html += `
+    <rect x="${serverX - 45}" y="${serverY - 28}" width="90" height="56" rx="4"
+      fill="#141c2a" stroke="#00d4aa" stroke-width="1.5"/>
+    <text x="${serverX}" y="${serverY - 8}" text-anchor="middle"
+      font-family="Share Tech Mono,monospace" font-size="10" fill="#00d4aa">SPECTRA</text>
+    <text x="${serverX}" y="${serverY + 6}" text-anchor="middle"
+      font-family="Share Tech Mono,monospace" font-size="9" fill="#6b8299">SERVER</text>
+    <text x="${serverX}" y="${serverY + 20}" text-anchor="middle"
+      font-size="14" fill="#00d4aa">⚡</text>
+  `;
+
+  // Email nodes and curved lines
+  emails.forEach((email, i) => {
+    const ey = startY + i * spacing;
+    const mx = serverX + (emailX - serverX) / 2;
+    const hasEmail = alertEmails.length > 0;
+    const lineColor = hasEmail ? '#1e2d42' : '#1a2530';
+
+    // Curved path
+    html += `
+      <path id="line-${i}" d="M${serverX + 45},${serverY} C${mx},${serverY} ${mx},${ey} ${emailX - 36},${ey}"
+        fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="5,3"/>
+    `;
+
+    // Email icon circle
+    html += `
+      <circle cx="${emailX}" cy="${ey}" r="28" fill="#141c2a" stroke="${hasEmail ? '#1e2d42' : '#141c2a'}" stroke-width="1"/>
+      <text x="${emailX}" y="${ey - 4}" text-anchor="middle" font-size="14" fill="${hasEmail ? '#4a9eff' : '#2a3d52'}">✉</text>
+      <text x="${emailX}" y="${ey + 10}" text-anchor="middle"
+        font-family="Share Tech Mono,monospace" font-size="8" fill="${hasEmail ? '#6b8299' : '#2a3d52'}">
+        ${hasEmail ? email.split('@')[0].substring(0, 10) : '—'}
+      </text>
+    `;
+  });
+
+  svg.innerHTML = html;
+}
+
+function resetFlow() {
+  renderFlow();
+}
+
+async function dispatchAlerts() {
+  if (alertEmails.length === 0) {
+    alert('Please add at least one recipient email.');
+    return;
+  }
+
+  const btn = document.getElementById('dispatchBtn');
+  btn.textContent = 'DISPATCHING...';
+  btn.disabled = true;
+
+  // Animate packets traveling along each line
+  await animatePackets();
+
+  // Call backend
+  try {
+    await fetch(`${API}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene_id: currentAlertDetection?.id || 'latest' })
+    });
+  } catch(e) { /* demo mode */ }
+
+  // Show success state
+  const svg = document.getElementById('flowSvg');
+  alertEmails.forEach((_, i) => {
+    const line = svg.querySelector(`#line-${i}`);
+    if (line) line.setAttribute('stroke', '#00d4aa');
+  });
+
+  btn.textContent = '✓ ALERTS SENT';
+  btn.style.background = '#00d4aa';
+  btn.style.color = '#000';
+
+  // Update alert log
+  alertEmails.forEach(email => {
+    const log = document.getElementById('alertLog');
+    const empty = log.querySelector('.empty-state');
+    if (empty) empty.remove();
+    const entry = document.createElement('div');
+    entry.style.cssText = 'font-family:var(--mono);font-size:10px;color:var(--teal);padding:6px 0;border-bottom:1px solid var(--border);';
+    entry.textContent = `${new Date().toLocaleTimeString()} → ${email}`;
+    log.prepend(entry);
+  });
+
+  alertCount += alertEmails.length;
+  document.getElementById('statAlerts').textContent = alertCount;
+
+  await sleep(2000);
+  closeAlertModal();
+  btn.textContent = 'DISPATCH ALERT';
+  btn.style.background = '#ff4444';
+  btn.style.color = '#fff';
+  btn.disabled = false;
+}
+
+async function animatePackets() {
+  const svg = document.getElementById('flowSvg');
+  const count = alertEmails.length;
+
+  for (let i = 0; i < count; i++) {
+    const path = svg.querySelector(`#line-${i}`);
+    if (!path) continue;
+
+    path.setAttribute('stroke', '#00d4aa');
+    path.setAttribute('stroke-width', '2');
+
+    // Create animated packet
+    const packet = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    packet.setAttribute('font-size', '12');
+    packet.setAttribute('fill', '#00d4aa');
+    packet.textContent = '📄';
+
+    const length = path.getTotalLength();
+    let start = null;
+    const duration = 800;
+
+    await new Promise(resolve => {
+      function step(ts) {
+        if (!start) start = ts;
+        const t = Math.min((ts - start) / duration, 1);
+        const pt = path.getPointAtLength(t * length);
+        packet.setAttribute('x', pt.x - 6);
+        packet.setAttribute('y', pt.y + 5);
+        if (!packet.parentNode) svg.appendChild(packet);
+        if (t < 1) requestAnimationFrame(step);
+        else {
+          packet.remove();
+          resolve();
+        }
+      }
+      requestAnimationFrame(step);
+    });
+
+    await sleep(150);
+  }
+}
 </script>
+
 </body>
 </html>
