@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spectra — Oil Spill Detection</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <style>
   :root {
     --bg: #0a0e13;
@@ -728,6 +730,51 @@
   </div>
 </div>
 
+<!-- WATCH ZONE MODAL -->
+<div id="watchZoneModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#0f1520;border:1px solid #1e2d42;border-radius:8px;width:480px;max-width:95vw;padding:32px;position:relative;">
+
+    <button onclick="closeWatchZoneModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#6b8299;font-size:20px;cursor:pointer;">✕</button>
+
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#00d4aa;text-transform:uppercase;margin-bottom:4px;">New Watch Zone</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#6b8299;margin-bottom:24px;">Polygon drawn — configure zone details</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Zone Name</div>
+        <input id="wzName" type="text" placeholder="e.g. Bonga Field North" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
+      </div>
+
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Client / Organization</div>
+        <input id="wzClient" type="text" placeholder="e.g. SPDC, NNPC, Amnesty" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
+      </div>
+
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Priority Level</div>
+        <select id="wzPriority" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;">
+          <option value="high">High — Critical infrastructure</option>
+          <option value="medium" selected>Medium — Active monitoring</option>
+          <option value="low">Low — Periodic check</option>
+        </select>
+      </div>
+
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Description (optional)</div>
+        <input id="wzDescription" type="text" placeholder="e.g. Offshore pipeline corridor near Bonga" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
+      </div>
+
+    </div>
+
+    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;">
+      <button onclick="closeWatchZoneModal()" style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">CANCEL</button>
+      <button onclick="saveWatchZone()" style="background:#00d4aa;color:#000;border:none;border-radius:4px;padding:10px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;">SAVE ZONE</button>
+    </div>
+
+  </div>
+</div>
+
 <script>
 const API = 'https://silver-space-lamp-x5w6pj4wxpvjf9w5-3000.app.github.dev/';
 let scanCount = 0;
@@ -758,6 +805,141 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 18,
   subdomains: 'abcd'
 }).addTo(map);
+
+// ─── WATCH ZONE DRAWING ─────────────────────────────────
+
+const drawnItems = new L.FeatureGroup().addTo(map);
+
+const drawControl = new L.Control.Draw({
+  position: 'topright',
+  draw: {
+    polygon: {
+      shapeOptions: {
+        color: '#00d4aa',
+        fillColor: '#00d4aa',
+        fillOpacity: 0.15,
+        weight: 2
+      },
+      showArea: true,
+      allowIntersection: false
+    },
+    rectangle: {
+      shapeOptions: {
+        color: '#00d4aa',
+        fillColor: '#00d4aa',
+        fillOpacity: 0.15,
+        weight: 2
+      }
+    },
+    circle: false,
+    circlemarker: false,
+    marker: false,
+    polyline: false
+  },
+  edit: {
+    featureGroup: drawnItems,
+    remove: true
+  }
+});
+map.addControl(drawControl);
+
+// Watch zone modal elements
+let pendingPolygon = null;
+
+map.on(L.Draw.Event.CREATED, function(e) {
+  const layer = e.layer;
+  drawnItems.addLayer(layer);
+  pendingPolygon = layer.toGeoJSON().geometry;
+  openWatchZoneModal(pendingPolygon);
+});
+
+function openWatchZoneModal(polygon) {
+  document.getElementById('watchZoneModal').style.display = 'flex';
+}
+
+function closeWatchZoneModal() {
+  document.getElementById('watchZoneModal').style.display = 'none';
+  pendingPolygon = null;
+  drawnItems.clearLayers();
+}
+
+async function saveWatchZone() {
+  const name = document.getElementById('wzName').value.trim();
+  const client = document.getElementById('wzClient').value.trim();
+  const priority = document.getElementById('wzPriority').value;
+  const description = document.getElementById('wzDescription').value.trim();
+
+  if (!name || !client) {
+    alert('Please fill in zone name and client name.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/watch-zones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        client_name: client,
+        priority,
+        description,
+        polygon_geojson: pendingPolygon
+      })
+    });
+    const data = await res.json();
+
+    // Add to map permanently with label
+    drawnItems.eachLayer(layer => {
+      layer.bindPopup(`
+        <div class="popup-title">${name}</div>
+        <div class="popup-row"><strong>Client:</strong> ${client}</div>
+        <div class="popup-row"><strong>Priority:</strong> ${priority}</div>
+        <div class="popup-row"><strong>Zone ID:</strong> ${data.id}</div>
+        <div class="popup-row"><strong>Status:</strong> Active</div>
+      `).openPopup();
+    });
+
+    closeWatchZoneModal();
+    loadWatchZones();
+    alert(`Watch zone "${name}" saved. ID: ${data.id}`);
+
+  } catch(e) {
+    alert('Failed to save watch zone. Check API connection.');
+  }
+}
+
+async function loadWatchZones() {
+  try {
+    const res = await fetch(`${API}/watch-zones`);
+    const data = await res.json();
+
+    data.watch_zones.forEach(zone => {
+      if (!zone.polygon) return;
+      const color = zone.priority === 'high' ? '#ff4444' :
+                    zone.priority === 'medium' ? '#f5a623' : '#4a9eff';
+
+      L.geoJSON(zone.polygon, {
+        style: {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.08,
+          weight: 1.5,
+          dashArray: '6,3'
+        }
+      }).bindPopup(`
+        <div class="popup-title">${zone.name}</div>
+        <div class="popup-row"><strong>Client:</strong> ${zone.client_name}</div>
+        <div class="popup-row"><strong>Priority:</strong> ${zone.priority}</div>
+        <div class="popup-row"><strong>ID:</strong> ${zone.id}</div>
+        <div class="popup-row"><strong>Created:</strong> ${new Date(zone.created_at).toLocaleDateString()}</div>
+      `).addTo(map);
+    });
+  } catch(e) {
+    console.log('Could not load watch zones');
+  }
+}
+
+loadWatchZones();
 
 // Satellite imagery toggle layer (hidden by default)
 const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
