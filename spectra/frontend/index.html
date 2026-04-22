@@ -41,7 +41,6 @@
     flex-direction: column;
   }
 
-  /* TOP BAR */
   .topbar {
     height: 52px;
     background: var(--panel);
@@ -128,14 +127,12 @@
     50% { opacity: 0.6; }
   }
 
-  /* MAIN LAYOUT */
   .main {
     display: flex;
     flex: 1;
     overflow: hidden;
   }
 
-  /* LEFT PANEL */
   .left-panel {
     width: 280px;
     background: var(--panel);
@@ -160,7 +157,6 @@
     margin-bottom: 12px;
   }
 
-  /* LAYER TOGGLES */
   .layer-item {
     display: flex;
     align-items: center;
@@ -219,7 +215,6 @@
   }
   .toggle.on::after { transform: translateX(16px); }
 
-  /* DETECTION CARDS */
   .detection-card {
     background: var(--panel2);
     border: 1px solid var(--border);
@@ -241,10 +236,71 @@
   }
 
   .detection-card:hover { border-color: var(--teal); }
-
   .detection-card.high::before { background: var(--red); }
   .detection-card.medium::before { background: var(--amber); }
   .detection-card.low::before { background: var(--blue); }
+
+  /* ── Phase C: Look-alike chip ────────────────────────────────────────── */
+  .lookalike-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .lookalike-chip .chip-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+  }
+
+  .lookalike-chip .chip-fill {
+    height: 100%;
+    border-radius: 1px;
+    transition: width 0.8s ease;
+  }
+
+  /* confirmed oil — red */
+  .lookalike-confirmed {
+    background: rgba(255,68,68,0.12);
+    border: 1px solid rgba(255,68,68,0.35);
+    color: #ff6b6b;
+  }
+  .lookalike-confirmed .chip-fill { background: #ff4444; }
+
+  /* probable oil — passed but lower score */
+  .lookalike-probable {
+    background: rgba(245,166,35,0.12);
+    border: 1px solid rgba(245,166,35,0.35);
+    color: #f5c842;
+  }
+  .lookalike-probable .chip-fill { background: #f5a623; }
+
+  /* suppressed look-alike */
+  .lookalike-rejected {
+    background: rgba(0,212,170,0.08);
+    border: 1px solid rgba(0,212,170,0.25);
+    color: #4fc9b8;
+  }
+  .lookalike-rejected .chip-fill { background: #00d4aa; }
+
+  /* not yet classified */
+  .lookalike-pending {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.25);
+  }
+  /* ───────────────────────────────────────────────────────────────────── */
 
   .card-id {
     font-family: var(--mono);
@@ -279,10 +335,7 @@
     color: var(--text-dim);
   }
 
-  .card-stat strong {
-    color: var(--teal);
-    font-weight: 400;
-  }
+  .card-stat strong { color: var(--teal); font-weight: 400; }
 
   .card-badge {
     display: inline-block;
@@ -296,9 +349,9 @@
   }
 
   .badge-alert { background: rgba(255,68,68,0.15); color: var(--red); border: 1px solid rgba(255,68,68,0.3); }
-  .badge-ok { background: rgba(0,212,170,0.1); color: var(--teal); border: 1px solid rgba(0,212,170,0.2); }
+  .badge-ok    { background: rgba(0,212,170,0.1); color: var(--teal); border: 1px solid rgba(0,212,170,0.2); }
+  .badge-suppressed { background: rgba(107,130,153,0.15); color: var(--text-dim); border: 1px solid rgba(107,130,153,0.3); }
 
-  /* STATS ROW */
   .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -329,13 +382,8 @@
     letter-spacing: 1px;
   }
 
-  /* MAP */
-  #map {
-    flex: 1;
-    background: #0a0e13;
-  }
+  #map { flex: 1; background: #0a0e13; }
 
-  /* RIGHT PANEL */
   .right-panel {
     width: 260px;
     background: var(--panel);
@@ -346,7 +394,6 @@
     overflow-y: auto;
   }
 
-  /* LEGEND */
   .legend-item {
     display: flex;
     align-items: center;
@@ -362,7 +409,6 @@
     flex-shrink: 0;
   }
 
-  /* COORDINATE DISPLAY */
   .coord-display {
     font-family: var(--mono);
     font-size: 11px;
@@ -371,29 +417,10 @@
     line-height: 1.8;
   }
 
-  /* MAP CONTROLS */
-  .leaflet-control-zoom {
-    border: 1px solid var(--border) !important;
-    border-radius: 4px !important;
-    overflow: hidden;
-  }
+  .leaflet-control-zoom { border: 1px solid var(--border) !important; border-radius: 4px !important; overflow: hidden; }
+  .leaflet-control-zoom a { background: var(--panel) !important; color: var(--text) !important; border-bottom: 1px solid var(--border) !important; width: 28px !important; height: 28px !important; line-height: 28px !important; font-size: 16px !important; }
+  .leaflet-control-zoom a:hover { background: var(--panel2) !important; color: var(--teal) !important; }
 
-  .leaflet-control-zoom a {
-    background: var(--panel) !important;
-    color: var(--text) !important;
-    border-bottom: 1px solid var(--border) !important;
-    width: 28px !important;
-    height: 28px !important;
-    line-height: 28px !important;
-    font-size: 16px !important;
-  }
-
-  .leaflet-control-zoom a:hover {
-    background: var(--panel2) !important;
-    color: var(--teal) !important;
-  }
-
-  /* SCAN PROGRESS */
   .scan-progress {
     display: none;
     font-family: var(--mono);
@@ -406,74 +433,18 @@
 
   .scan-progress.active { display: block; }
 
-  .progress-bar {
-    height: 2px;
-    background: var(--border);
-    border-radius: 1px;
-    margin-top: 6px;
-    overflow: hidden;
-  }
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; margin-top: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--amber); width: 0%; transition: width 0.3s; border-radius: 1px; }
 
-  .progress-fill {
-    height: 100%;
-    background: var(--amber);
-    width: 0%;
-    transition: width 0.3s;
-    border-radius: 1px;
-  }
-
-  /* GRID OVERLAY on map */
-  .map-overlay-info {
-    position: absolute;
-    bottom: 24px;
-    left: 300px;
-    z-index: 999;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: rgba(0,212,170,0.6);
-    pointer-events: none;
-  }
-
-  /* Leaflet popup custom */
-  .leaflet-popup-content-wrapper {
-    background: var(--panel) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 4px !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
-    color: var(--text) !important;
-  }
-
+  .leaflet-popup-content-wrapper { background: var(--panel) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important; color: var(--text) !important; }
   .leaflet-popup-tip { background: var(--panel) !important; }
 
-  .popup-title {
-    font-family: var(--display);
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--red);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  .popup-row {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-  }
-
+  .popup-title { font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--red); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .popup-row { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
   .popup-row strong { color: var(--teal); }
 
-  .empty-state {
-    text-align: center;
-    padding: 24px 16px;
-    color: var(--text-dim);
-    font-family: var(--mono);
-    font-size: 11px;
-    line-height: 1.8;
-  }
+  .empty-state { text-align: center; padding: 24px 16px; color: var(--text-dim); font-family: var(--mono); font-size: 11px; line-height: 1.8; }
 
-  /* scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -506,17 +477,13 @@
   <!-- LEFT PANEL -->
   <div class="left-panel">
 
-    <!-- LAYERS -->
     <div class="panel-section">
       <div class="panel-label">Map Layers</div>
 
       <div class="layer-item" onclick="toggleLayer('spills')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#ff4444;box-shadow:0 0 6px #ff4444;"></div>
-          <div>
-            <div class="layer-name">Spill Detections</div>
-            <div class="layer-sub">AI-detected polygons</div>
-          </div>
+          <div><div class="layer-name">Spill Detections</div><div class="layer-sub">AI-detected polygons</div></div>
         </div>
         <div class="toggle on" id="toggle-spills"></div>
       </div>
@@ -524,10 +491,7 @@
       <div class="layer-item" onclick="toggleLayer('heatmap')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#f5a623;box-shadow:0 0 6px #f5a623;"></div>
-          <div>
-            <div class="layer-name">Confidence Heatmap</div>
-            <div class="layer-sub">Probability intensity</div>
-          </div>
+          <div><div class="layer-name">Confidence Heatmap</div><div class="layer-sub">Probability intensity</div></div>
         </div>
         <div class="toggle" id="toggle-heatmap"></div>
       </div>
@@ -535,10 +499,7 @@
       <div class="layer-item" onclick="toggleLayer('pipelines')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#4a9eff;box-shadow:0 0 6px #4a9eff;"></div>
-          <div>
-            <div class="layer-name">Pipeline Corridors</div>
-            <div class="layer-sub">Known pipeline routes</div>
-          </div>
+          <div><div class="layer-name">Pipeline Corridors</div><div class="layer-sub">Known pipeline routes</div></div>
         </div>
         <div class="toggle on" id="toggle-pipelines"></div>
       </div>
@@ -546,10 +507,7 @@
       <div class="layer-item" onclick="toggleLayer('historical')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#8b5cf6;box-shadow:0 0 6px #8b5cf6;"></div>
-          <div>
-            <div class="layer-name">Historical Spills</div>
-            <div class="layer-sub">Documented incidents</div>
-          </div>
+          <div><div class="layer-name">Historical Spills</div><div class="layer-sub">Documented incidents</div></div>
         </div>
         <div class="toggle on" id="toggle-historical"></div>
       </div>
@@ -557,10 +515,7 @@
       <div class="layer-item" onclick="toggleLayer('vegetation')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#22c55e;box-shadow:0 0 6px #22c55e;"></div>
-          <div>
-            <div class="layer-name">Vegetation Stress</div>
-            <div class="layer-sub">NDVI anomalies</div>
-          </div>
+          <div><div class="layer-name">Vegetation Stress</div><div class="layer-sub">NDVI anomalies</div></div>
         </div>
         <div class="toggle" id="toggle-vegetation"></div>
       </div>
@@ -568,16 +523,12 @@
       <div class="layer-item" onclick="toggleLayer('sar')">
         <div class="layer-left">
           <div class="layer-dot" style="background:#00d4aa;box-shadow:0 0 6px #00d4aa;"></div>
-          <div>
-            <div class="layer-name">SAR Backscatter</div>
-            <div class="layer-sub">Raw radar overlay</div>
-          </div>
+          <div><div class="layer-name">SAR Backscatter</div><div class="layer-sub">Raw radar overlay</div></div>
         </div>
         <div class="toggle" id="toggle-sar"></div>
       </div>
     </div>
 
-    <!-- STATS -->
     <div class="panel-section">
       <div class="panel-label">Session Statistics</div>
       <div class="stats-grid">
@@ -600,14 +551,10 @@
       </div>
     </div>
 
-    <!-- DETECTIONS LIST -->
     <div class="panel-section" style="flex:1;">
       <div class="panel-label">Detection Archive</div>
       <div id="detectionList">
-        <div class="empty-state">
-          NO DETECTIONS YET<br>
-          RUN A SCAN TO BEGIN<br>SURVEILLANCE
-        </div>
+        <div class="empty-state">NO DETECTIONS YET<br>RUN A SCAN TO BEGIN<br>SURVEILLANCE</div>
       </div>
     </div>
 
@@ -619,22 +566,18 @@
   <!-- RIGHT PANEL -->
   <div class="right-panel">
 
-    <!-- COORDINATES -->
     <div class="panel-section">
       <div class="panel-label">Cursor Position</div>
       <div class="coord-display" id="coordDisplay">
-        LAT: —<br>
-        LON: —<br>
-        ZONE: Niger Delta AOI
+        LAT: —<br>LON: —<br>ZONE: Niger Delta AOI
       </div>
     </div>
 
-    <!-- LEGEND -->
     <div class="panel-section">
       <div class="panel-label">Legend</div>
       <div class="legend-item">
         <div class="legend-swatch" style="background:#ff4444;opacity:0.8;"></div>
-        High confidence spill (>70%)
+        High confidence spill (&gt;70%)
       </div>
       <div class="legend-item">
         <div class="legend-swatch" style="background:#f5a623;opacity:0.8;"></div>
@@ -652,9 +595,17 @@
         <div class="legend-swatch" style="background:#22c55e;opacity:0.5;"></div>
         Vegetation stress zones
       </div>
+      <!-- Phase C legend entries -->
+      <div class="legend-item" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div class="legend-swatch" style="background:rgba(255,68,68,0.4);border:1px solid rgba(255,68,68,0.6);"></div>
+        Classifier: Confirmed oil
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:rgba(0,212,170,0.3);border:1px solid rgba(0,212,170,0.5);"></div>
+        Classifier: Look-alike / suppressed
+      </div>
     </div>
 
-    <!-- AOI INFO -->
     <div class="panel-section">
       <div class="panel-label">Area of Interest</div>
       <div class="coord-display">
@@ -667,7 +618,6 @@
       </div>
     </div>
 
-    <!-- SATELLITE STATUS -->
     <div class="panel-section">
       <div class="panel-label">Satellite Status</div>
       <div class="coord-display">
@@ -679,7 +629,6 @@
       </div>
     </div>
 
-    <!-- ALERT LOG -->
     <div class="panel-section" style="flex:1;">
       <div class="panel-label">Alert Log</div>
       <div id="alertLog">
@@ -691,20 +640,19 @@
 </div>
 
 <!-- ALERT FLOW MODAL -->
-<div id="alertModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:none;align-items:center;justify-content:center;">
+<div id="alertModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#0f1520;border:1px solid #1e2d42;border-radius:8px;width:780px;max-width:95vw;padding:32px;position:relative;">
 
-    <!-- CLOSE -->
     <button onclick="closeAlertModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#6b8299;font-size:20px;cursor:pointer;">✕</button>
 
-    <!-- TITLE -->
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;color:#00d4aa;text-transform:uppercase;margin-bottom:4px;">Alert Dispatch</div>
     <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#6b8299;margin-bottom:24px;">Configure recipients and dispatch spill alert</div>
 
-    <!-- DETECTION SUMMARY -->
-    <div id="modalDetectionInfo" style="background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:12px 16px;margin-bottom:20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c8d8e8;line-height:1.8;"></div>
+    <div id="modalDetectionInfo" style="background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:12px 16px;margin-bottom:12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c8d8e8;line-height:1.8;"></div>
 
-    <!-- EMAIL INPUT -->
+    <!-- Phase C: classifier gate banner inside modal -->
+    <div id="modalClassifierBanner" style="display:none;border-radius:4px;padding:10px 14px;margin-bottom:16px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.7;"></div>
+
     <div style="margin-bottom:20px;">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Recipient Emails</div>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -714,7 +662,6 @@
       <div id="emailTags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;"></div>
     </div>
 
-    <!-- FLOW DIAGRAM -->
     <div style="margin-bottom:20px;">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">Dispatch Flow</div>
       <div style="background:#141c2a;border:1px solid #1e2d42;border-radius:6px;padding:20px;position:relative;overflow:hidden;">
@@ -722,7 +669,6 @@
       </div>
     </div>
 
-    <!-- SEND BUTTON -->
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button onclick="closeAlertModal()" style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">CANCEL</button>
       <button onclick="dispatchAlerts()" id="dispatchBtn" style="background:#ff4444;color:#fff;border:none;border-radius:4px;padding:10px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;">DISPATCH ALERT</button>
@@ -740,17 +686,14 @@
     <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#6b8299;margin-bottom:24px;">Polygon drawn — configure zone details</div>
 
     <div style="display:flex;flex-direction:column;gap:14px;">
-
       <div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Zone Name</div>
         <input id="wzName" type="text" placeholder="e.g. Bonga Field North" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
       </div>
-
       <div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Client / Organization</div>
         <input id="wzClient" type="text" placeholder="e.g. SPDC, NNPC, Amnesty" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
       </div>
-
       <div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Priority Level</div>
         <select id="wzPriority" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;">
@@ -759,19 +702,16 @@
           <option value="low">Low — Periodic check</option>
         </select>
       </div>
-
       <div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b8299;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Description (optional)</div>
         <input id="wzDescription" type="text" placeholder="e.g. Offshore pipeline corridor near Bonga" style="width:100%;background:#141c2a;border:1px solid #1e2d42;border-radius:4px;padding:10px 14px;color:#c8d8e8;font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;"/>
       </div>
-
     </div>
 
     <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;">
       <button onclick="closeWatchZoneModal()" style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">CANCEL</button>
       <button onclick="saveWatchZone()" style="background:#00d4aa;color:#000;border:none;border-radius:4px;padding:10px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;">SAVE ZONE</button>
     </div>
-
   </div>
 </div>
 
@@ -786,70 +726,33 @@ let spillLayerGroup, pipelineLayerGroup, historicalLayerGroup, vegetationLayerGr
 // CLOCK
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toUTCString().split(' ')[4] + ' UTC';
+  document.getElementById('clock').textContent = now.toUTCString().split(' ')[4] + ' UTC';
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-// MAP INIT — dark tile layer
-const map = L.map('map', {
-  center: [5.0, 6.5],
-  zoom: 8,
-  zoomControl: true,
-  attributionControl: false
-});
+// MAP
+const map = L.map('map', { center: [5.0, 6.5], zoom: 8, zoomControl: true, attributionControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18, subdomains: 'abcd' }).addTo(map);
 
-// Dark geological basemap
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 18,
-  subdomains: 'abcd'
-}).addTo(map);
-
-// ─── WATCH ZONE DRAWING ─────────────────────────────────
-
+// WATCH ZONE DRAWING
 const drawnItems = new L.FeatureGroup().addTo(map);
-
 const drawControl = new L.Control.Draw({
   position: 'topright',
   draw: {
-    polygon: {
-      shapeOptions: {
-        color: '#00d4aa',
-        fillColor: '#00d4aa',
-        fillOpacity: 0.15,
-        weight: 2
-      },
-      showArea: true,
-      allowIntersection: false
-    },
-    rectangle: {
-      shapeOptions: {
-        color: '#00d4aa',
-        fillColor: '#00d4aa',
-        fillOpacity: 0.15,
-        weight: 2
-      }
-    },
-    circle: false,
-    circlemarker: false,
-    marker: false,
-    polyline: false
+    polygon: { shapeOptions: { color: '#00d4aa', fillColor: '#00d4aa', fillOpacity: 0.15, weight: 2 }, showArea: true, allowIntersection: false },
+    rectangle: { shapeOptions: { color: '#00d4aa', fillColor: '#00d4aa', fillOpacity: 0.15, weight: 2 } },
+    circle: false, circlemarker: false, marker: false, polyline: false
   },
-  edit: {
-    featureGroup: drawnItems,
-    remove: true
-  }
+  edit: { featureGroup: drawnItems, remove: true }
 });
 map.addControl(drawControl);
 
-// Watch zone modal elements
 let pendingPolygon = null;
 
 map.on(L.Draw.Event.CREATED, function(e) {
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-  pendingPolygon = layer.toGeoJSON().geometry;
+  drawnItems.addLayer(e.layer);
+  pendingPolygon = e.layer.toGeoJSON().geometry;
   openWatchZoneModal(pendingPolygon);
 });
 
@@ -868,27 +771,14 @@ async function saveWatchZone() {
   const client = document.getElementById('wzClient').value.trim();
   const priority = document.getElementById('wzPriority').value;
   const description = document.getElementById('wzDescription').value.trim();
-
-  if (!name || !client) {
-    alert('Please fill in zone name and client name.');
-    return;
-  }
-
+  if (!name || !client) { alert('Please fill in zone name and client name.'); return; }
   try {
     const res = await fetch(`${API}/watch-zones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        client_name: client,
-        priority,
-        description,
-        polygon_geojson: pendingPolygon
-      })
+      body: JSON.stringify({ name, client_name: client, priority, description, polygon_geojson: pendingPolygon })
     });
     const data = await res.json();
-
-    // Add to map permanently with label
     drawnItems.eachLayer(layer => {
       layer.bindPopup(`
         <div class="popup-title">${name}</div>
@@ -898,11 +788,9 @@ async function saveWatchZone() {
         <div class="popup-row"><strong>Status:</strong> Active</div>
       `).openPopup();
     });
-
     closeWatchZoneModal();
     loadWatchZones();
     alert(`Watch zone "${name}" saved. ID: ${data.id}`);
-
   } catch(e) {
     alert('Failed to save watch zone. Check API connection.');
   }
@@ -912,20 +800,11 @@ async function loadWatchZones() {
   try {
     const res = await fetch(`${API}/watch-zones`);
     const data = await res.json();
-
     data.watch_zones.forEach(zone => {
       if (!zone.polygon) return;
-      const color = zone.priority === 'high' ? '#ff4444' :
-                    zone.priority === 'medium' ? '#f5a623' : '#4a9eff';
-
+      const color = zone.priority === 'high' ? '#ff4444' : zone.priority === 'medium' ? '#f5a623' : '#4a9eff';
       L.geoJSON(zone.polygon, {
-        style: {
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.08,
-          weight: 1.5,
-          dashArray: '6,3'
-        }
+        style: { color, fillColor: color, fillOpacity: 0.08, weight: 1.5, dashArray: '6,3' }
       }).bindPopup(`
         <div class="popup-title">${zone.name}</div>
         <div class="popup-row"><strong>Client:</strong> ${zone.client_name}</div>
@@ -934,58 +813,33 @@ async function loadWatchZones() {
         <div class="popup-row"><strong>Created:</strong> ${new Date(zone.created_at).toLocaleDateString()}</div>
       `).addTo(map);
     });
-  } catch(e) {
-    console.log('Could not load watch zones');
-  }
+  } catch(e) { console.log('Could not load watch zones'); }
 }
-
 loadWatchZones();
 
-// Satellite imagery toggle layer (hidden by default)
-const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 18,
-  opacity: 0.6
-});
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, opacity: 0.6 });
 
-// COORDINATE DISPLAY
 map.on('mousemove', function(e) {
   document.getElementById('coordDisplay').innerHTML =
-    `LAT: ${e.latlng.lat.toFixed(4)}°N<br>` +
-    `LON: ${e.latlng.lng.toFixed(4)}°E<br>` +
-    `ZONE: Niger Delta AOI`;
+    `LAT: ${e.latlng.lat.toFixed(4)}°N<br>LON: ${e.latlng.lng.toFixed(4)}°E<br>ZONE: Niger Delta AOI`;
 });
 
-// AOI BOUNDARY
 const aoiBounds = [[4.0, 5.0],[4.0, 8.5],[6.5, 8.5],[6.5, 5.0],[4.0, 5.0]];
-L.polygon(aoiBounds, {
-  color: '#00d4aa',
-  weight: 1,
-  opacity: 0.4,
-  fillColor: '#00d4aa',
-  fillOpacity: 0.03,
-  dashArray: '6,4'
-}).addTo(map);
+L.polygon(aoiBounds, { color: '#00d4aa', weight: 1, opacity: 0.4, fillColor: '#00d4aa', fillOpacity: 0.03, dashArray: '6,4' }).addTo(map);
 
-// PIPELINE CORRIDORS — simplified Niger Delta pipeline routes
 pipelineLayerGroup = L.layerGroup();
 const pipelines = [
-  [[5.1, 5.2],[5.3, 5.8],[5.6, 6.2],[5.8, 6.8],[6.0, 7.2]],
-  [[4.8, 5.5],[5.0, 6.0],[5.2, 6.5],[5.4, 7.0],[5.5, 7.5]],
-  [[5.5, 5.8],[5.6, 6.3],[5.7, 6.9],[5.8, 7.4],[5.9, 8.0]],
-  [[4.6, 6.0],[4.9, 6.4],[5.1, 6.8],[5.3, 7.2]],
-  [[5.2, 5.3],[5.4, 5.9],[5.7, 6.4],[6.0, 6.8],[6.2, 7.1]],
+  [[5.1,5.2],[5.3,5.8],[5.6,6.2],[5.8,6.8],[6.0,7.2]],
+  [[4.8,5.5],[5.0,6.0],[5.2,6.5],[5.4,7.0],[5.5,7.5]],
+  [[5.5,5.8],[5.6,6.3],[5.7,6.9],[5.8,7.4],[5.9,8.0]],
+  [[4.6,6.0],[4.9,6.4],[5.1,6.8],[5.3,7.2]],
+  [[5.2,5.3],[5.4,5.9],[5.7,6.4],[6.0,6.8],[6.2,7.1]],
 ];
 pipelines.forEach(coords => {
-  L.polyline(coords, {
-    color: '#4a9eff',
-    weight: 1.5,
-    opacity: 0.6,
-    dashArray: '8,4'
-  }).addTo(pipelineLayerGroup);
+  L.polyline(coords, { color: '#4a9eff', weight: 1.5, opacity: 0.6, dashArray: '8,4' }).addTo(pipelineLayerGroup);
 });
 pipelineLayerGroup.addTo(map);
 
-// HISTORICAL SPILLS
 historicalLayerGroup = L.layerGroup();
 const historicalSpills = [
   { lat: 4.85, lng: 6.35, name: 'Bonga Field', year: 2011, volume: '40,000 barrels' },
@@ -996,48 +850,27 @@ const historicalSpills = [
   { lat: 4.95, lng: 5.85, name: 'Warri Refinery', year: 2020, volume: '5,000 barrels' },
 ];
 historicalSpills.forEach(s => {
-  L.circleMarker([s.lat, s.lng], {
-    radius: 8,
-    color: '#8b5cf6',
-    fillColor: '#8b5cf6',
-    fillOpacity: 0.5,
-    weight: 1.5
-  }).bindPopup(`
-    <div class="popup-title">Historical Spill</div>
-    <div class="popup-row"><strong>Site:</strong> ${s.name}</div>
-    <div class="popup-row"><strong>Year:</strong> ${s.year}</div>
-    <div class="popup-row"><strong>Volume:</strong> ${s.volume}</div>
-    <div class="popup-row"><strong>Status:</strong> Documented</div>
-  `).addTo(historicalLayerGroup);
+  L.circleMarker([s.lat, s.lng], { radius: 8, color: '#8b5cf6', fillColor: '#8b5cf6', fillOpacity: 0.5, weight: 1.5 })
+    .bindPopup(`<div class="popup-title">Historical Spill</div><div class="popup-row"><strong>Site:</strong> ${s.name}</div><div class="popup-row"><strong>Year:</strong> ${s.year}</div><div class="popup-row"><strong>Volume:</strong> ${s.volume}</div>`)
+    .addTo(historicalLayerGroup);
 });
 historicalLayerGroup.addTo(map);
 
-// VEGETATION STRESS ZONES (hidden by default)
 vegetationLayerGroup = L.layerGroup();
 const vegZones = [
-  { bounds: [[4.7, 6.0],[5.0, 6.4]], opacity: 0.25 },
-  { bounds: [[5.1, 6.6],[5.4, 7.0]], opacity: 0.3 },
-  { bounds: [[4.5, 6.9],[4.8, 7.3]], opacity: 0.2 },
+  { bounds: [[4.7,6.0],[5.0,6.4]], opacity: 0.25 },
+  { bounds: [[5.1,6.6],[5.4,7.0]], opacity: 0.3 },
+  { bounds: [[4.5,6.9],[4.8,7.3]], opacity: 0.2 },
 ];
 vegZones.forEach(z => {
-  L.rectangle(z.bounds, {
-    color: '#22c55e',
-    fillColor: '#22c55e',
-    fillOpacity: z.opacity,
-    weight: 0.5,
-    opacity: 0.4
-  }).addTo(vegetationLayerGroup);
+  L.rectangle(z.bounds, { color: '#22c55e', fillColor: '#22c55e', fillOpacity: z.opacity, weight: 0.5, opacity: 0.4 }).addTo(vegetationLayerGroup);
 });
 
-// SPILL DETECTION LAYER
 spillLayerGroup = L.layerGroup().addTo(map);
 
-// LAYER TOGGLE FUNCTION
 function toggleLayer(name) {
   layers[name] = !layers[name];
-  const toggle = document.getElementById('toggle-' + name);
-  toggle.classList.toggle('on', layers[name]);
-
+  document.getElementById('toggle-' + name).classList.toggle('on', layers[name]);
   if (name === 'pipelines') { layers[name] ? pipelineLayerGroup.addTo(map) : map.removeLayer(pipelineLayerGroup); }
   if (name === 'historical') { layers[name] ? historicalLayerGroup.addTo(map) : map.removeLayer(historicalLayerGroup); }
   if (name === 'vegetation') { layers[name] ? vegetationLayerGroup.addTo(map) : map.removeLayer(vegetationLayerGroup); }
@@ -1045,7 +878,33 @@ function toggleLayer(name) {
   if (name === 'sar') { layers[name] ? satelliteLayer.addTo(map) : map.removeLayer(satelliteLayer); }
 }
 
-// SCAN FUNCTION
+// ============================================================
+// LOOK-ALIKE CHIP RENDERER (Phase C)
+// ============================================================
+function renderLookalikeChip(d) {
+  if (d.lookalike_score == null) {
+    return `<div class="lookalike-chip lookalike-pending">◌ &nbsp;CLASSIFIER PENDING</div>`;
+  }
+  const score   = d.lookalike_score;
+  const passed  = d.lookalike_passed;
+  const pct     = Math.round(score * 100);
+  const chipCls = passed ? (score >= 0.85 ? 'lookalike-confirmed' : 'lookalike-probable') : 'lookalike-rejected';
+  const icon    = passed ? '◈' : '◇';
+  const label   = passed ? `OIL CONFIRMED &nbsp;${pct}%` : `LOOK-ALIKE &nbsp;${pct}%`;
+  const title   = passed
+    ? `Classifier: oil signature confirmed (${pct}% confidence)`
+    : `Alert suppressed — classified as ${d.lookalike_label} (${pct}% oil probability, below threshold)`;
+
+  return `
+    <div class="lookalike-chip ${chipCls}" title="${title}">
+      <span>${icon} &nbsp;${label}</span>
+      <div class="chip-bar"><div class="chip-fill" style="width:${pct}%"></div></div>
+    </div>`;
+}
+
+// ============================================================
+// SCAN
+// ============================================================
 async function triggerScan() {
   const btn = document.getElementById('scanBtn');
   const progress = document.getElementById('scanProgress');
@@ -1063,9 +922,9 @@ async function triggerScan() {
     [10, 'Authenticating with Copernicus CDSE...'],
     [25, 'Downloading Sentinel-1 scene tiles...'],
     [45, 'Applying speckle filter + normalization...'],
-    [65, 'Running U-Net inference on 512 patches...'],
-    [82, 'Vectorizing spill mask to GeoJSON...'],
-    [95, 'Computing confidence + area metrics...'],
+    [65, 'Running U-Net inference on patches...'],
+    [80, 'Running look-alike classifier...'],        // Phase C step
+    [92, 'Vectorizing spill mask to GeoJSON...'],
     [100, 'Detection complete. Checking alert threshold...'],
   ];
 
@@ -1075,7 +934,6 @@ async function triggerScan() {
     status.textContent = msg;
   }
 
-  // Call API
   try {
     const res = await fetch(`${API}/scan`, {
       method: 'POST',
@@ -1084,20 +942,17 @@ async function triggerScan() {
     });
     const data = await res.json();
     const scanId = data.scan_id;
-
-    // Poll for result
     await sleep(2000);
     const resultRes = await fetch(`${API}/detections`);
     const resultData = await resultRes.json();
     const detection = resultData.detections.find(d => d.id === scanId);
-
     if (detection) {
       addDetectionToMap(detection);
       addDetectionCard(detection);
       updateStats(detection);
     }
   } catch(e) {
-    // Demo mode — simulate a detection if API unreachable
+    // Demo mode — simulate a detection with Phase C fields
     const mockDetection = {
       id: 'demo-' + Date.now().toString(36),
       detected_at: new Date().toISOString(),
@@ -1106,9 +961,12 @@ async function triggerScan() {
       spill_pixels: 4653,
       detected: true,
       alert_sent: false,
+      lookalike_score: 0.82,
+      lookalike_label: 'oil',
+      lookalike_passed: true,
       polygon: {
         type: 'Polygon',
-        coordinates: [[[6.2, 4.85],[6.35, 4.85],[6.35, 4.98],[6.2, 4.98],[6.2, 4.85]]]
+        coordinates: [[[6.2,4.85],[6.35,4.85],[6.35,4.98],[6.2,4.98],[6.2,4.85]]]
       }
     };
     addDetectionToMap(mockDetection);
@@ -1135,32 +993,35 @@ function addDetectionToMap(d) {
   if (d.polygon.coordinates) {
     latlngs = d.polygon.coordinates[0].map(c => [c[1], c[0]]);
   } else {
-    latlngs = [[4.85, 6.2],[4.85, 6.35],[4.98, 6.35],[4.98, 6.2]];
+    latlngs = [[4.85,6.2],[4.85,6.35],[4.98,6.35],[4.98,6.2]];
   }
 
-  const poly = L.polygon(latlngs, {
-    color: color,
-    fillColor: color,
-    fillOpacity: 0.3,
-    weight: 2,
-    opacity: 0.9
+  // Phase C: if look-alike classifier suppressed this, use a dimmer style
+  const fillOpacity = (d.lookalike_passed === false) ? 0.08 : 0.3;
+  const dashArray   = (d.lookalike_passed === false) ? '6,4' : null;
+
+  const lookalikeLine = d.lookalike_score != null
+    ? `<div class="popup-row"><strong>Classifier:</strong> ${d.lookalike_label} (${Math.round(d.lookalike_score * 100)}%)</div>
+       <div class="popup-row"><strong>Alert gate:</strong> ${d.lookalike_passed ? 'PASSED' : 'SUPPRESSED'}</div>`
+    : '';
+
+  L.polygon(latlngs, {
+    color, fillColor: color, fillOpacity, weight: 2, opacity: 0.9, dashArray
   }).bindPopup(`
-    <div class="popup-title">⚠ Spill Detected</div>
+    <div class="popup-title">${d.lookalike_passed === false ? '◇ Suppressed' : '⚠ Spill Detected'}</div>
     <div class="popup-row"><strong>ID:</strong> ${d.id}</div>
     <div class="popup-row"><strong>Confidence:</strong> ${d.confidence}%</div>
     <div class="popup-row"><strong>Area:</strong> ${d.area_km2} km²</div>
-    <div class="popup-row"><strong>Pixels:</strong> ${d.spill_pixels.toLocaleString()}</div>
+    <div class="popup-row"><strong>Pixels:</strong> ${d.spill_pixels?.toLocaleString()}</div>
     <div class="popup-row"><strong>Detected:</strong> ${new Date(d.detected_at).toLocaleString()}</div>
+    ${lookalikeLine}
     <div class="popup-row"><strong>Alert Sent:</strong> ${d.alert_sent ? 'YES' : 'NO'}</div>
   `).addTo(spillLayerGroup);
 
   map.flyTo(latlngs[0], 10, { duration: 1.5 });
 
-  // Pulse animation on detection
   L.circleMarker(latlngs[0], {
-    radius: 20, color: color, fillColor: color,
-    fillOpacity: 0.1, weight: 1, opacity: 0.6,
-    className: 'pulse-ring'
+    radius: 20, color, fillColor: color, fillOpacity: 0.1, weight: 1, opacity: 0.6
   }).addTo(spillLayerGroup);
 }
 
@@ -1169,13 +1030,22 @@ function addDetectionCard(d) {
   const empty = list.querySelector('.empty-state');
   if (empty) empty.remove();
 
-  const conf = d.confidence;
+  const conf  = d.confidence;
   const level = conf >= 70 ? 'high' : conf >= 50 ? 'medium' : 'low';
-  const time = new Date(d.detected_at).toLocaleTimeString();
+  const time  = new Date(d.detected_at).toLocaleTimeString();
 
-  // Store detection globally so we can reference by ID
   window._detections = window._detections || {};
   window._detections[d.id] = d;
+
+  // Phase C: determine badge
+  let badge;
+  if (d.lookalike_passed === false) {
+    badge = '<span class="card-badge badge-suppressed">SUPPRESSED</span>';
+  } else if (d.alert_sent) {
+    badge = '<span class="card-badge badge-alert">ALERT SENT</span>';
+  } else {
+    badge = '<span class="card-badge badge-ok">MONITORING</span>';
+  }
 
   const card = document.createElement('div');
   card.className = `detection-card ${level}`;
@@ -1186,10 +1056,9 @@ function addDetectionCard(d) {
       <div class="card-stat"><strong>${d.area_km2}</strong> km²</div>
       <div class="card-stat"><strong>${d.spill_pixels?.toLocaleString()}</strong> px</div>
     </div>
+    ${renderLookalikeChip(d)}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
-      ${d.alert_sent
-        ? '<span class="card-badge badge-alert">ALERT SENT</span>'
-        : '<span class="card-badge badge-ok">MONITORING</span>'}
+      ${badge}
       <button onclick="openAlertModal(window._detections['${d.id}'])"
         style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:3px;padding:3px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;">
         ✉ DISPATCH
@@ -1208,6 +1077,7 @@ function addDetectionCard(d) {
     log.prepend(entry);
   }
 }
+
 function updateStats(d) {
   const count = parseInt(document.getElementById('statDetections').textContent) + 1;
   totalArea += d.area_km2;
@@ -1217,7 +1087,6 @@ function updateStats(d) {
   document.getElementById('statAlerts').textContent = alertCount;
 }
 
-// Load existing detections on startup
 async function loadDetections() {
   try {
     const res = await fetch(`${API}/detections`);
@@ -1229,17 +1098,13 @@ async function loadDetections() {
         updateStats(d);
       }
     });
-  } catch(e) {
-    console.log('API not reachable — running in demo mode');
-  }
+  } catch(e) { console.log('API not reachable — running in demo mode'); }
 }
-
 loadDetections();
 
-// =====================
-// ALERT MODAL SYSTEM
-// =====================
-
+// ============================================================
+// ALERT MODAL
+// ============================================================
 let alertEmails = [];
 let currentAlertDetection = null;
 
@@ -1247,12 +1112,32 @@ function openAlertModal(detection) {
   currentAlertDetection = detection;
   document.getElementById('alertModal').style.display = 'flex';
 
-  // Fill detection info
   document.getElementById('modalDetectionInfo').innerHTML =
     `DETECTION ID: ${detection.id} &nbsp;|&nbsp; ` +
     `CONFIDENCE: <span style="color:#ff4444">${detection.confidence}%</span> &nbsp;|&nbsp; ` +
     `AREA: <span style="color:#00d4aa">${detection.area_km2} km²</span> &nbsp;|&nbsp; ` +
     `TIME: ${new Date(detection.detected_at).toLocaleString()}`;
+
+  // Phase C: show classifier gate banner
+  const banner = document.getElementById('modalClassifierBanner');
+  if (detection.lookalike_score != null) {
+    const passed = detection.lookalike_passed;
+    const pct    = Math.round(detection.lookalike_score * 100);
+    banner.style.display = 'block';
+    if (passed) {
+      banner.style.background = 'rgba(255,68,68,0.08)';
+      banner.style.border = '1px solid rgba(255,68,68,0.3)';
+      banner.style.color = '#ff9999';
+      banner.innerHTML = `◈ &nbsp;LOOK-ALIKE CLASSIFIER: <strong style="color:#ff6b6b">OIL CONFIRMED</strong> &nbsp;— confidence ${pct}% &nbsp;· &nbsp;Alert gate OPEN`;
+    } else {
+      banner.style.background = 'rgba(0,212,170,0.06)';
+      banner.style.border = '1px solid rgba(0,212,170,0.25)';
+      banner.style.color = '#4fc9b8';
+      banner.innerHTML = `◇ &nbsp;LOOK-ALIKE CLASSIFIER: <strong style="color:#00d4aa">SUPPRESSED</strong> &nbsp;— classified as ${detection.lookalike_label} (${pct}%) &nbsp;· &nbsp;Manual override available`;
+    }
+  } else {
+    banner.style.display = 'none';
+  }
 
   renderFlow();
 }
@@ -1282,8 +1167,7 @@ function removeEmail(email) {
 }
 
 function renderEmailTags() {
-  const container = document.getElementById('emailTags');
-  container.innerHTML = alertEmails.map(email => `
+  document.getElementById('emailTags').innerHTML = alertEmails.map(email => `
     <div style="display:inline-flex;align-items:center;gap:6px;background:#1e2d42;border:1px solid #2a3d52;border-radius:3px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#c8d8e8;">
       ${email}
       <span onclick="removeEmail('${email}')" style="color:#6b8299;cursor:pointer;font-size:13px;line-height:1;">×</span>
@@ -1298,47 +1182,30 @@ function renderFlow() {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
   const emails = alertEmails.length > 0 ? alertEmails : ['(no recipients yet)'];
-  const serverX = 100;
-  const serverY = H / 2;
-  const emailX = W - 80;
+  const serverX = 100, serverY = H / 2, emailX = W - 80;
   const count = emails.length;
   const spacing = Math.min(60, (H - 40) / Math.max(count, 1));
   const startY = H / 2 - ((count - 1) * spacing) / 2;
 
   let html = '';
-
-  // Server box
   html += `
-    <rect x="${serverX - 45}" y="${serverY - 28}" width="90" height="56" rx="4"
-      fill="#141c2a" stroke="#00d4aa" stroke-width="1.5"/>
-    <text x="${serverX}" y="${serverY - 8}" text-anchor="middle"
-      font-family="Share Tech Mono,monospace" font-size="10" fill="#00d4aa">SPECTRA</text>
-    <text x="${serverX}" y="${serverY + 6}" text-anchor="middle"
-      font-family="Share Tech Mono,monospace" font-size="9" fill="#6b8299">SERVER</text>
-    <text x="${serverX}" y="${serverY + 20}" text-anchor="middle"
-      font-size="14" fill="#00d4aa">⚡</text>
+    <rect x="${serverX-45}" y="${serverY-28}" width="90" height="56" rx="4" fill="#141c2a" stroke="#00d4aa" stroke-width="1.5"/>
+    <text x="${serverX}" y="${serverY-8}" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="10" fill="#00d4aa">SPECTRA</text>
+    <text x="${serverX}" y="${serverY+6}" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="9" fill="#6b8299">SERVER</text>
+    <text x="${serverX}" y="${serverY+20}" text-anchor="middle" font-size="14" fill="#00d4aa">⚡</text>
   `;
 
-  // Email nodes and curved lines
   emails.forEach((email, i) => {
     const ey = startY + i * spacing;
     const mx = serverX + (emailX - serverX) / 2;
     const hasEmail = alertEmails.length > 0;
-    const lineColor = hasEmail ? '#1e2d42' : '#1a2530';
-
-    // Curved path
     html += `
-      <path id="line-${i}" d="M${serverX + 45},${serverY} C${mx},${serverY} ${mx},${ey} ${emailX - 36},${ey}"
-        fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="5,3"/>
-    `;
-
-    // Email icon circle
-    html += `
+      <path id="line-${i}" d="M${serverX+45},${serverY} C${mx},${serverY} ${mx},${ey} ${emailX-36},${ey}"
+        fill="none" stroke="${hasEmail ? '#1e2d42' : '#1a2530'}" stroke-width="1.5" stroke-dasharray="5,3"/>
       <circle cx="${emailX}" cy="${ey}" r="28" fill="#141c2a" stroke="${hasEmail ? '#1e2d42' : '#141c2a'}" stroke-width="1"/>
-      <text x="${emailX}" y="${ey - 4}" text-anchor="middle" font-size="14" fill="${hasEmail ? '#4a9eff' : '#2a3d52'}">✉</text>
-      <text x="${emailX}" y="${ey + 10}" text-anchor="middle"
-        font-family="Share Tech Mono,monospace" font-size="8" fill="${hasEmail ? '#6b8299' : '#2a3d52'}">
-        ${hasEmail ? email.split('@')[0].substring(0, 10) : '—'}
+      <text x="${emailX}" y="${ey-4}" text-anchor="middle" font-size="14" fill="${hasEmail ? '#4a9eff' : '#2a3d52'}">✉</text>
+      <text x="${emailX}" y="${ey+10}" text-anchor="middle" font-family="Share Tech Mono,monospace" font-size="8" fill="${hasEmail ? '#6b8299' : '#2a3d52'}">
+        ${hasEmail ? email.split('@')[0].substring(0,10) : '—'}
       </text>
     `;
   });
@@ -1346,33 +1213,22 @@ function renderFlow() {
   svg.innerHTML = html;
 }
 
-function resetFlow() {
-  renderFlow();
-}
+function resetFlow() { renderFlow(); }
 
 async function dispatchAlerts() {
-  if (alertEmails.length === 0) {
-    alert('Please add at least one recipient email.');
-    return;
-  }
-
+  if (alertEmails.length === 0) { alert('Please add at least one recipient email.'); return; }
   const btn = document.getElementById('dispatchBtn');
   btn.textContent = 'DISPATCHING...';
   btn.disabled = true;
-
-  // Animate packets traveling along each line
   await animatePackets();
-
-  // Call backend
   try {
     await fetch(`${API}/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scene_id: currentAlertDetection?.id || 'latest' })
     });
-  } catch(e) { /* demo mode */ }
+  } catch(e) {}
 
-  // Show success state
   const svg = document.getElementById('flowSvg');
   alertEmails.forEach((_, i) => {
     const line = svg.querySelector(`#line-${i}`);
@@ -1383,7 +1239,6 @@ async function dispatchAlerts() {
   btn.style.background = '#00d4aa';
   btn.style.color = '#000';
 
-  // Update alert log
   alertEmails.forEach(email => {
     const log = document.getElementById('alertLog');
     const empty = log.querySelector('.empty-state');
@@ -1396,7 +1251,6 @@ async function dispatchAlerts() {
 
   alertCount += alertEmails.length;
   document.getElementById('statAlerts').textContent = alertCount;
-
   await sleep(2000);
   closeAlertModal();
   btn.textContent = 'DISPATCH ALERT';
@@ -1408,24 +1262,18 @@ async function dispatchAlerts() {
 async function animatePackets() {
   const svg = document.getElementById('flowSvg');
   const count = alertEmails.length;
-
   for (let i = 0; i < count; i++) {
     const path = svg.querySelector(`#line-${i}`);
     if (!path) continue;
-
     path.setAttribute('stroke', '#00d4aa');
     path.setAttribute('stroke-width', '2');
-
-    // Create animated packet
     const packet = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     packet.setAttribute('font-size', '12');
     packet.setAttribute('fill', '#00d4aa');
     packet.textContent = '📄';
-
     const length = path.getTotalLength();
     let start = null;
     const duration = 800;
-
     await new Promise(resolve => {
       function step(ts) {
         if (!start) start = ts;
@@ -1435,18 +1283,13 @@ async function animatePackets() {
         packet.setAttribute('y', pt.y + 5);
         if (!packet.parentNode) svg.appendChild(packet);
         if (t < 1) requestAnimationFrame(step);
-        else {
-          packet.remove();
-          resolve();
-        }
+        else { packet.remove(); resolve(); }
       }
       requestAnimationFrame(step);
     });
-
     await sleep(150);
   }
 }
 </script>
-
 </body>
 </html>

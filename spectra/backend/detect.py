@@ -8,10 +8,23 @@ from shapely.geometry import shape, mapping
 from pathlib import Path
 import segmentation_models_pytorch as smp
 import json
+import logging
+
+# ── Phase C: Look-alike Classifier ──────────────────────────────────────────
+from backend.lookalike_classifier import LookalikeClassifier
+
+logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path("models")
 PATCH_SIZE = 256
 DEVICE = "cpu"
+
+# Load once at module level — reused for every scan, never reloaded
+# If models/lookalike_model.pth does not exist yet, it logs a warning
+# and passes all detections through (score = 1.0) until you train it.
+_lookalike_classifier = LookalikeClassifier(
+    model_path=MODELS_DIR / "lookalike_model.pth"
+)
 
 def load_model():
     model = smp.Unet(
@@ -54,7 +67,10 @@ def preprocess_patch(vv_arr, vh_arr):
 def run_detection(vv_path: str, vh_path: str = None):
     """
     Run spill detection on a Sentinel-1 scene.
-    Returns a DetectionResult dict.
+    Returns a DetectionResult dict, now including:
+        lookalike_score   — float 0-1 (oil probability from Phase C classifier)
+        lookalike_label   — "oil" | "look-alike"
+        lookalike_passed  — bool (True = proceed to alert)
     """
     model = load_model()
     print(f"Model loaded. Running detection on {Path(vv_path).name}...")
@@ -67,9 +83,13 @@ def run_detection(vv_path: str, vh_path: str = None):
 
         vh_src = rasterio.open(vh_path) if vh_path else None
 
-        # Full probability map
         prob_map = np.zeros((height, width), dtype=np.float32)
         count_map = np.zeros((height, width), dtype=np.float32)
+
+        # We also need to keep one raw SAR patch around for the look-alike
+        # classifier — we save the patch with the highest mean confidence.
+        best_patch_vv = None
+        best_patch_conf = -1.0
 
         CHUNK = 1024
         patch_count = 0
@@ -82,7 +102,6 @@ def run_detection(vv_path: str, vh_path: str = None):
                 vv_chunk = vv_src.read(1, window=window).astype(np.float32)
                 vh_chunk = vh_src.read(1, window=window).astype(np.float32) if vh_src else vv_chunk.copy()
 
-                # Tile chunk into patches
                 ch, cw = vv_chunk.shape
                 for i in range(0, ch - PATCH_SIZE + 1, PATCH_SIZE):
                     for j in range(0, cw - PATCH_SIZE + 1, PATCH_SIZE):
@@ -98,11 +117,17 @@ def run_detection(vv_path: str, vh_path: str = None):
                         prob_map[r0:r0+PATCH_SIZE, c0:c0+PATCH_SIZE] += prob
                         count_map[r0:r0+PATCH_SIZE, c0:c0+PATCH_SIZE] += 1
 
+                        # Track the patch with the highest confidence
+                        # — this is what we feed to the look-alike classifier
+                        patch_conf = float(prob.mean())
+                        if patch_conf > best_patch_conf:
+                            best_patch_conf = patch_conf
+                            best_patch_vv = vv_tile.copy()
+
                         patch_count += 1
 
                 print(f"  Chunk ({row_off},{col_off}) done — {patch_count} patches")
 
-                # Limit for speed during demo
                 if patch_count >= 16:
                     break
             if patch_count >= 16:
@@ -111,29 +136,23 @@ def run_detection(vv_path: str, vh_path: str = None):
         if vh_src:
             vh_src.close()
 
-    # Average overlapping predictions
     count_map = np.where(count_map == 0, 1, count_map)
     prob_map = prob_map / count_map
 
-    # Binary mask at 0.5 threshold
     binary_mask = (prob_map > 0.5).astype(np.uint8)
 
-    # Compute confidence and area
     spill_pixels = binary_mask.sum()
     confidence = float(prob_map[binary_mask == 1].mean()) if spill_pixels > 0 else 0.0
 
-    # Pixel size in meters (Sentinel-1 GRD ~10m)
     pixel_area_m2 = 10 * 10
     area_km2 = round((spill_pixels * pixel_area_m2) / 1e6, 4)
 
-    # Vectorize mask to GeoJSON polygons
     polygons = []
     if spill_pixels > 0:
         for geom, val in shapes(binary_mask, transform=transform):
             if val == 1:
                 polygons.append(shape(geom))
 
-    # Merge all polygons into one GeoJSON feature
     if polygons:
         from shapely.ops import unary_union
         merged = unary_union(polygons)
@@ -141,13 +160,37 @@ def run_detection(vv_path: str, vh_path: str = None):
     else:
         geojson_polygon = None
 
+    # ── Phase C: Run look-alike classifier ──────────────────────────────────
+    # Only runs if a spill was detected and we have a patch to classify.
+    # If the model is not yet trained, classifier fails open (score=1.0, passed=True).
+    if spill_pixels > 100 and best_patch_vv is not None:
+        lookalike_result = _lookalike_classifier.classify(best_patch_vv)
+        logger.info(
+            "Look-alike check: score=%.3f label=%s passed=%s",
+            lookalike_result["lookalike_score"],
+            lookalike_result["lookalike_label"],
+            lookalike_result["lookalike_passed"],
+        )
+    else:
+        # No meaningful spill detected — classifier not needed
+        lookalike_result = {
+            "lookalike_score": None,
+            "lookalike_label": None,
+            "lookalike_passed": None,
+        }
+    # ────────────────────────────────────────────────────────────────────────
+
     result = {
         "confidence": round(confidence * 100, 2),
         "area_km2": area_km2,
         "spill_pixels": int(spill_pixels),
         "polygon": geojson_polygon,
         "detected": spill_pixels > 100,
-        "scene": Path(vv_path).name
+        "scene": Path(vv_path).name,
+        # Phase C fields
+        "lookalike_score":  lookalike_result["lookalike_score"],
+        "lookalike_label":  lookalike_result["lookalike_label"],
+        "lookalike_passed": lookalike_result["lookalike_passed"],
     }
 
     return result
@@ -159,7 +202,6 @@ if __name__ == "__main__":
 
     scenes_dir = Path("data/scenes")
 
-    # Extract zip if needed
     for zf in scenes_dir.glob("*.zip"):
         extract_dir = scenes_dir / zf.stem
         if not extract_dir.exists():
@@ -179,10 +221,13 @@ if __name__ == "__main__":
         if vv_path:
             result = run_detection(vv_path, vh_path)
             print(f"\n--- DETECTION RESULT ---")
-            print(f"Detected:   {result['detected']}")
-            print(f"Confidence: {result['confidence']}%")
-            print(f"Area:       {result['area_km2']} km²")
-            print(f"Pixels:     {result['spill_pixels']}")
-            print(f"Polygon:    {'Yes' if result['polygon'] else 'No'}")
+            print(f"Detected:        {result['detected']}")
+            print(f"Confidence:      {result['confidence']}%")
+            print(f"Area:            {result['area_km2']} km²")
+            print(f"Pixels:          {result['spill_pixels']}")
+            print(f"Polygon:         {'Yes' if result['polygon'] else 'No'}")
+            print(f"Lookalike Score: {result['lookalike_score']}")
+            print(f"Lookalike Label: {result['lookalike_label']}")
+            print(f"Alert Passed:    {result['lookalike_passed']}")
         else:
             print("Could not find VV band in scene.")
