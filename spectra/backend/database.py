@@ -4,7 +4,6 @@ from datetime import datetime
 import os
 from pathlib import Path
 
-# SQLite — zero config, works everywhere
 DB_PATH = Path("data/spectra.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -42,11 +41,36 @@ class Detection(Base):
     detected = Column(Boolean, default=False)
     alert_sent = Column(Boolean, default=False)
     alert_recipients = Column(Text, nullable=True)
+
     wind_speed = Column(Float, nullable=True)
     wind_reliable = Column(Boolean, nullable=True)
     optical_confirmed = Column(Boolean, nullable=True)
+
     lookalike_score = Column(Float, nullable=True)
+
     status = Column(String, default="complete")
+
+    # ── Phase D: Wind + Drift Intelligence ────────────────────────────────
+    wind_speed_ms = Column(Float, nullable=True)
+    wind_direction_deg = Column(Float, nullable=True)
+    wind_u = Column(Float, nullable=True)
+    wind_v = Column(Float, nullable=True)
+
+    sar_validity = Column(String, nullable=True)  # valid|too_low|too_high|borderline|unavailable|error
+    sar_validity_detail = Column(String, nullable=True)
+
+    lookalike_wind_risk = Column(String, nullable=True)  # high|medium|low|unknown
+    lookalike_wind_note = Column(String, nullable=True)
+
+    drift_bearing_deg = Column(Float, nullable=True)
+    drift_speed_ms = Column(Float, nullable=True)
+    drift_24h_km = Column(Float, nullable=True)
+
+    drift_geojson = Column(Text, nullable=True)  # JSON string
+
+    wind_fetched_at = Column(String, nullable=True)  # ISO-8601
+    wind_data_source = Column(String, nullable=True)
+    # ──────────────────────────────────────────────────────────────────────
 
 
 class AlertLog(Base):

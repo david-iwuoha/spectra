@@ -12,6 +12,8 @@ import logging
 
 # ── Phase C: Look-alike Classifier ──────────────────────────────────────────
 from backend.lookalike_classifier import LookalikeClassifier
+from backend.wind_context import WindContextLayer, drift_arrow_geojson
+
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +21,10 @@ MODELS_DIR = Path("models")
 PATCH_SIZE = 256
 DEVICE = "cpu"
 
-# Load once at module level — reused for every scan, never reloaded
-# If models/lookalike_model.pth does not exist yet, it logs a warning
-# and passes all detections through (score = 1.0) until you train it.
 _lookalike_classifier = LookalikeClassifier(
     model_path=MODELS_DIR / "lookalike_model.pth"
 )
+_wind_context = WindContextLayer()
 
 def load_model():
     model = smp.Unet(
@@ -65,13 +65,7 @@ def preprocess_patch(vv_arr, vh_arr):
     return torch.tensor(patch).unsqueeze(0).float()
 
 def run_detection(vv_path: str, vh_path: str = None):
-    """
-    Run spill detection on a Sentinel-1 scene.
-    Returns a DetectionResult dict, now including:
-        lookalike_score   — float 0-1 (oil probability from Phase C classifier)
-        lookalike_label   — "oil" | "look-alike"
-        lookalike_passed  — bool (True = proceed to alert)
-    """
+
     model = load_model()
     print(f"Model loaded. Running detection on {Path(vv_path).name}...")
 
@@ -86,8 +80,6 @@ def run_detection(vv_path: str, vh_path: str = None):
         prob_map = np.zeros((height, width), dtype=np.float32)
         count_map = np.zeros((height, width), dtype=np.float32)
 
-        # We also need to keep one raw SAR patch around for the look-alike
-        # classifier — we save the patch with the highest mean confidence.
         best_patch_vv = None
         best_patch_conf = -1.0
 
@@ -117,8 +109,6 @@ def run_detection(vv_path: str, vh_path: str = None):
                         prob_map[r0:r0+PATCH_SIZE, c0:c0+PATCH_SIZE] += prob
                         count_map[r0:r0+PATCH_SIZE, c0:c0+PATCH_SIZE] += 1
 
-                        # Track the patch with the highest confidence
-                        # — this is what we feed to the look-alike classifier
                         patch_conf = float(prob.mean())
                         if patch_conf > best_patch_conf:
                             best_patch_conf = patch_conf
@@ -160,9 +150,7 @@ def run_detection(vv_path: str, vh_path: str = None):
     else:
         geojson_polygon = None
 
-    # ── Phase C: Run look-alike classifier ──────────────────────────────────
-    # Only runs if a spill was detected and we have a patch to classify.
-    # If the model is not yet trained, classifier fails open (score=1.0, passed=True).
+    # ── Phase C: Look-alike classifier ──────────────────────────────────────
     if spill_pixels > 100 and best_patch_vv is not None:
         lookalike_result = _lookalike_classifier.classify(best_patch_vv)
         logger.info(
@@ -172,12 +160,28 @@ def run_detection(vv_path: str, vh_path: str = None):
             lookalike_result["lookalike_passed"],
         )
     else:
-        # No meaningful spill detected — classifier not needed
         lookalike_result = {
             "lookalike_score": None,
             "lookalike_label": None,
             "lookalike_passed": None,
         }
+    # ────────────────────────────────────────────────────────────────────────
+
+    # ── Phase D: Wind context (ADDED HERE SAFELY) ───────────────────────────
+    wind = _wind_context.get_context(
+        lat=0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][1],
+        lon=0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][0],
+        timestamp=None  # replace later with Sentinel metadata if available
+    )
+
+    drift_geojson = None
+    if wind["drift_vector"]:
+        drift_geojson = drift_arrow_geojson(
+            0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][1],
+            0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][0],
+            wind["drift_vector"],
+            hours=24
+        )
     # ────────────────────────────────────────────────────────────────────────
 
     result = {
@@ -187,10 +191,27 @@ def run_detection(vv_path: str, vh_path: str = None):
         "polygon": geojson_polygon,
         "detected": spill_pixels > 100,
         "scene": Path(vv_path).name,
-        # Phase C fields
-        "lookalike_score":  lookalike_result["lookalike_score"],
-        "lookalike_label":  lookalike_result["lookalike_label"],
+
+        # Phase C
+        "lookalike_score": lookalike_result["lookalike_score"],
+        "lookalike_label": lookalike_result["lookalike_label"],
         "lookalike_passed": lookalike_result["lookalike_passed"],
+
+        # Phase D (Wind integration)
+        "wind_speed_ms": wind["wind_speed_ms"],
+        "wind_direction_deg": wind["wind_direction_deg"],
+        "wind_u": wind["wind_u"],
+        "wind_v": wind["wind_v"],
+        "sar_validity": wind["sar_validity"],
+        "sar_validity_detail": wind["sar_validity_detail"],
+        "lookalike_wind_risk": wind["lookalike_wind_risk"],
+        "lookalike_wind_note": wind["lookalike_wind_note"],
+        "drift_bearing_deg": wind["drift_vector"]["bearing_deg"] if wind["drift_vector"] else None,
+        "drift_speed_ms": wind["drift_vector"]["speed_ms"] if wind["drift_vector"] else None,
+        "drift_24h_km": wind["drift_vector"]["24h_km"] if wind["drift_vector"] else None,
+        "drift_geojson": json.dumps(drift_geojson) if drift_geojson else None,
+        "wind_fetched_at": wind["wind_fetched_at"],
+        "wind_data_source": wind["wind_data_source"],
     }
 
     return result
@@ -212,7 +233,6 @@ if __name__ == "__main__":
     safe_dirs = list(scenes_dir.glob("*.SAFE"))
     if not safe_dirs:
         print("No .SAFE scene found in data/scenes/")
-        print("Upload a Sentinel-1 scene zip to data/scenes/ first.")
     else:
         scene = safe_dirs[0]
         print(f"Running detection on: {scene.name}")
@@ -220,14 +240,7 @@ if __name__ == "__main__":
 
         if vv_path:
             result = run_detection(vv_path, vh_path)
-            print(f"\n--- DETECTION RESULT ---")
-            print(f"Detected:        {result['detected']}")
-            print(f"Confidence:      {result['confidence']}%")
-            print(f"Area:            {result['area_km2']} km²")
-            print(f"Pixels:          {result['spill_pixels']}")
-            print(f"Polygon:         {'Yes' if result['polygon'] else 'No'}")
-            print(f"Lookalike Score: {result['lookalike_score']}")
-            print(f"Lookalike Label: {result['lookalike_label']}")
-            print(f"Alert Passed:    {result['lookalike_passed']}")
+            print("\n--- DETECTION RESULT ---")
+            print(result)
         else:
             print("Could not find VV band in scene.")
