@@ -44,9 +44,11 @@ class Detection(Base):
 
     wind_speed = Column(Float, nullable=True)
     wind_reliable = Column(Boolean, nullable=True)
-    optical_confirmed = Column(Boolean, nullable=True)
+    
 
     lookalike_score = Column(Float, nullable=True)
+    lookalike_label = Column(String, nullable=True)
+    lookalike_passed = Column(Boolean, nullable=True)
 
     status = Column(String, default="complete")
 
@@ -71,6 +73,25 @@ class Detection(Base):
     wind_fetched_at = Column(String, nullable=True)  # ISO-8601
     wind_data_source = Column(String, nullable=True)
     # ──────────────────────────────────────────────────────────────────────
+
+        # ── Phase E: Optical Cross-Validation ────────────────────────────────
+    optical_verdict = Column(String, nullable=True)
+    optical_reason = Column(String, nullable=True)
+    optical_confidence = Column(Float, nullable=True)
+    optical_cloud_fraction = Column(Float, nullable=True)
+
+    optical_osi = Column(Float, nullable=True)
+    optical_swiri = Column(Float, nullable=True)
+    optical_ndwi = Column(Float, nullable=True)
+
+    optical_scene_name = Column(String, nullable=True)
+    optical_scene_timestamp = Column(String, nullable=True)
+
+    optical_thumbnail_rgb = Column(Text, nullable=True)
+    optical_thumbnail_falsecolour = Column(Text, nullable=True)
+
+    optical_validated_at = Column(String, nullable=True)
+ # ──────────────────────────────────────────────────────────────────────
 
 
 class AlertLog(Base):

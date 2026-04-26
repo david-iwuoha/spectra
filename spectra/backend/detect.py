@@ -12,7 +12,9 @@ import logging
 
 # ── Phase C: Look-alike Classifier ──────────────────────────────────────────
 from backend.lookalike_classifier import LookalikeClassifier
-from backend.wind_context import WindContextLayer, drift_arrow_geojson
+from backend.wind_context import WindContextLayer, drift_arrow_geojson #phase D
+from backend.optical_validator import OpticalValidator #phase E
+
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ _lookalike_classifier = LookalikeClassifier(
     model_path=MODELS_DIR / "lookalike_model.pth"
 )
 _wind_context = WindContextLayer()
+_optical_validator = OpticalValidator()
 
 def load_model():
     model = smp.Unet(
@@ -63,6 +66,24 @@ def preprocess_patch(vv_arr, vh_arr):
     vh = normalize(lee_filter(to_db(vh_arr.astype(np.float32))))
     patch = np.stack([vv, vh], axis=0)
     return torch.tensor(patch).unsqueeze(0).float()
+
+    import re
+from datetime import datetime
+
+def _extract_scene_timestamp(scene_path):
+    """
+    Extract ISO timestamp from Sentinel scene filename.
+    Example:
+    S1A_IW_GRDH_1SDV_20241114T093000_...
+    """
+    name = Path(scene_path).name
+
+    match = re.search(r"(20\d{6}T\d{6})", name)
+    if match:
+        dt = datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    return "2024-01-17T17:53:33Z"
 
 def run_detection(vv_path: str, vh_path: str = None):
 
@@ -183,6 +204,43 @@ def run_detection(vv_path: str, vh_path: str = None):
             hours=24
         )
     # ────────────────────────────────────────────────────────────────────────
+    # ── Phase E: Optical cross-validation ───────────────────────────────
+    if geojson_polygon is not None and polygons:
+    try:
+        largest_polygon = max(polygons, key=lambda p: p.area)
+        centroid = largest_polygon.centroid
+        centroid_lat = float(centroid.y)
+        centroid_lon = float(centroid.x)
+    except Exception:
+        centroid_lat = 0.0
+        centroid_lon = 0.0
+    else:
+         centroid_lat = 0.0
+         centroid_lon = 0.0
+
+        optical = _optical_validator.validate(
+            lat=centroid_lat,
+            lon=centroid_lon,
+            detection_polygon=geojson_polygon,
+            scene_timestamp=_extract_scene_timestamp(vv_path),     # use real Sentinel-1 timestamp later
+            local_scene_path=None     # auto-search data/scenes/
+        )
+    else:
+        optical = {
+            "optical_verdict": None,
+            "optical_reason": None,
+            "optical_confidence": None,
+            "optical_cloud_fraction": None,
+            "optical_osi": None,
+            "optical_swiri": None,
+            "optical_ndwi": None,
+            "optical_scene_name": None,
+            "optical_scene_timestamp": None,
+            "optical_thumbnail_rgb": None,
+            "optical_thumbnail_falsecolour": None,
+            "optical_validated_at": None,
+        }
+      # ────────────────────────────────────────────────────────────────────────
 
     result = {
         "confidence": round(confidence * 100, 2),
@@ -212,6 +270,20 @@ def run_detection(vv_path: str, vh_path: str = None):
         "drift_geojson": json.dumps(drift_geojson) if drift_geojson else None,
         "wind_fetched_at": wind["wind_fetched_at"],
         "wind_data_source": wind["wind_data_source"],
+
+         # Phase E Optical
+        "optical_verdict": optical["optical_verdict"],
+        "optical_reason": optical["optical_reason"],
+        "optical_confidence": optical["optical_confidence"],
+        "optical_cloud_fraction": optical["optical_cloud_fraction"],
+        "optical_osi": optical["optical_osi"],
+        "optical_swiri": optical["optical_swiri"],
+        "optical_ndwi": optical["optical_ndwi"],
+        "optical_scene_name": optical["optical_scene_name"],
+        "optical_scene_timestamp": optical["optical_scene_timestamp"],
+        "optical_thumbnail_rgb": optical["optical_thumbnail_rgb"],
+        "optical_thumbnail_falsecolour": optical["optical_thumbnail_falsecolour"],
+        "optical_validated_at": optical["optical_validated_at"],
     }
 
     return result
