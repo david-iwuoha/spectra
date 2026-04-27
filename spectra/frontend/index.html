@@ -488,6 +488,25 @@
     background: rgba(245,166,35,0.06);
   }
 
+  .report-download-btn {
+   background: none;
+   border: 1px solid rgba(139,92,246,0.3);
+   color: rgba(139,92,246,0.7);
+   border-radius: 2px;
+   padding: 2px 7px;
+   font-family: var(--mono);
+   font-size: 8px;
+   letter-spacing: 0.06em;
+   text-transform: uppercase;
+   cursor: pointer;
+   transition: all 0.2s;
+  }
+ .report-download-btn:hover {
+   border-color: #8b5cf6;
+   color: #8b5cf6;
+   background: rgba(139,92,246,0.06);
+ }
+
   .sar-validity-badge {
     display: inline-flex;
     align-items: center;
@@ -1150,10 +1169,30 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:12px;justify-content:flex-end;">
-      <button onclick="closeAlertModal()" style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">CANCEL</button>
-      <button onclick="dispatchAlerts()" id="dispatchBtn" style="background:#ff4444;color:#fff;border:none;border-radius:4px;padding:10px 28px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase;">DISPATCH ALERT</button>
-    </div>
+ <div style="display:flex;gap:12px;justify-content:flex-end;">
+
+   <button onclick="closeAlertModal()"
+      style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;">
+     CANCEL
+   </button>
+
+    <button onclick="downloadReport(currentAlertDetection && currentAlertDetection.id)"
+     style="background:none;border:1px solid rgba(139,92,246,0.4);color:#8b5cf6;
+     border-radius:4px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;
+     font-size:13px;letter-spacing:1px;cursor:pointer;">
+      &#8659; DOWNLOAD REPORT
+   </button>
+
+   <button onclick="dispatchAlerts()" id="dispatchBtn"
+      style="background:#ff4444;color:#fff;border:none;border-radius:4px;padding:10px 28px;
+      font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;
+     letter-spacing:2px;cursor:pointer;text-transform:uppercase;">
+     DISPATCH ALERT
+   </button>
+
+  </div>
+
+    
   </div>
 </div>
 
@@ -1533,6 +1572,39 @@ async function refreshWindForDetection(detectionId, cardEl) {
   }
 }
 
+function downloadReport(detectionId) {
+  if (!detectionId) return;
+
+  var btn = document.querySelector(
+    '.detection-card[data-detection-id="' +
+    detectionId +
+    '"] .report-download-btn'
+  );
+
+  if (btn) {
+    btn.innerHTML = 'GENERATING...';
+    btn.disabled = true;
+  }
+
+  var url = API + '/detections/' + detectionId + '/report';
+
+  var link = document.createElement('a');
+  link.href = url;
+  link.download =
+    'spectra_detection_' + detectionId + '.pdf';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  setTimeout(function () {
+    if (btn) {
+      btn.innerHTML = '&#8659; PDF';
+      btn.disabled = false;
+    }
+  }, 3000);
+}
+
 // ============================================================
 // PHASE E — Optical cross-validation
 // ============================================================
@@ -1874,6 +1946,7 @@ function addDetectionCard(d) {
     '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
     '<button class="wind-refresh-btn" onclick="refreshWindForDetection(\'' + d.id + '\', this.closest(\'.detection-card\'))">&#8634; WIND</button>' +
     '<button class="optical-revalidate-btn" onclick="revalidateOptical(\'' + d.id + '\', this.closest(\'.detection-card\'))">&#9678; S2</button>' +
+    '<button class="report-download-btn" onclick="downloadReport(\'' + d.id + '\')">&#8659; PDF</button>' +
     '<button onclick="openAlertModal(window._detections[\'' + d.id + '\'])" ' +
     'style="background:none;border:1px solid #1e2d42;color:#6b8299;border-radius:3px;padding:3px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;">' +
     '&#9993; DISPATCH</button>' +
