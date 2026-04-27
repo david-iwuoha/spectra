@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, Depends
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
@@ -14,8 +14,9 @@ import json
 from fastapi import HTTPException
 from backend.wind_context import WindContextLayer, drift_arrow_geojson
 from backend.optical_validator import OpticalValidator
-from datetime import datetime
 from backend.database import init_db, get_db, Detection, WatchZone, AlertLog
+from fastapi.responses import Response as FastAPIResponse
+from backend.report_generator import ReportGenerator
 
 app = FastAPI(title="Spectra API", version="2.0.0")
 
@@ -34,6 +35,7 @@ TEST_DIR = Path("data/raw/oil-spill/test/images")
 init_db()
 _wind_context = WindContextLayer()
 _optical_validator = OpticalValidator()
+_report_generator = ReportGenerator()
 
 def load_model():
     model = smp.Unet(
@@ -291,6 +293,50 @@ def get_detection(detection_id: str, db: Session = Depends(get_db)):
         "status": d.status
     }
 
+    @app.get("/detections/{detection_id}/report")
+    async def download_report(detection_id: str, db: Session = Depends(get_db)):
+    """
+    Generate and download PDF evidence report for a detection.
+    Includes look-alike, wind and optical data.
+    """
+
+    if not _report_generator.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "PDF generation unavailable. "
+                "Install system deps: "
+                "sudo apt-get install -y libpango-1.0-0 "
+                "libpangoft2-1.0-0 libharfbuzz-subset0 "
+                "then: pip install weasyprint --break-system-packages"
+            )
+        )
+
+    det = db.query(Detection).filter(Detection.id == detection_id).first()
+
+    if not det:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    try:
+        pdf_bytes = _report_generator.generate(det)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {exc}"
+        )
+
+    filename = f"spectra_detection_{detection_id}.pdf"
+
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+            f'attachment; filename="{filename}"'
+        },
+    )
+
 @app.post("/detections/{detection_id}/wind")
 def refresh_wind(detection_id: str, db: Session = Depends(get_db)):
     """
@@ -382,7 +428,7 @@ def refresh_wind(detection_id: str, db: Session = Depends(get_db)):
     }
 
     @app.post("/detections/{detection_id}/optical")
-async def revalidate_optical(detection_id: str, db: Session = Depends(get_db)):
+    async def revalidate_optical(detection_id: str, db: Session = Depends(get_db)):
 
     det = db.query(Detection).filter(Detection.id == detection_id).first()
 
@@ -447,8 +493,8 @@ async def revalidate_optical(detection_id: str, db: Session = Depends(get_db)):
         "optical_validated_at": det.optical_validated_at,
     }
 
-    @app.get("/detections/{detection_id}/optical/thumbnail/{kind}")
-def get_optical_thumbnail(detection_id: str, kind: str, db: Session = Depends(get_db)):
+@app.get("/detections/{detection_id}/optical/thumbnail/{kind}")
+    def get_optical_thumbnail(detection_id: str, kind: str, db: Session = Depends(get_db)):
     import base64
     from fastapi.responses import Response
 
