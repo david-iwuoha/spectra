@@ -34,6 +34,7 @@ Dependencies:
 
 import base64
 import io
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -147,6 +148,123 @@ def _thumbnail_img(b64_uri: Optional[str], label: str) -> str:
         return f'<div class="thumb-placeholder"><span>Image unavailable</span><small>{label}</small></div>'
     return f'<div class="thumb-wrap"><img src="{b64_uri}" alt="{label}"/><div class="thumb-label">{label}</div></div>'
 
+def _render_ais_section(d: dict) -> str:
+    """
+    Build AIS Vessel Attribution section.
+    Safe fallback if backend module unavailable.
+    """
+    try:
+        from backend.ais_attribution import format_candidates_for_report
+    except Exception:
+        def format_candidates_for_report(rows, max_rows=10):
+            return rows[:max_rows]
+
+    ais_found = d.get("ais_vessels_found")
+    ais_note = d.get("ais_note") or ""
+    ais_source = d.get("ais_data_source") or "AIS data"
+    ais_queried = _fmt_ts(d.get("ais_queried_at"))
+    radius_nm = d.get("ais_search_radius_nm", 10)
+
+    top_raw = d.get("ais_top_suspect")
+    cand_raw = d.get("ais_candidates") or "[]"
+
+    try:
+        top = json.loads(top_raw) if isinstance(top_raw, str) else (top_raw or {})
+    except Exception:
+        top = {}
+
+    try:
+        candidates = json.loads(cand_raw) if isinstance(cand_raw, str) else (cand_raw or [])
+    except Exception:
+        candidates = []
+
+    rows = format_candidates_for_report(candidates, max_rows=10)
+
+    if ais_found is None:
+        return f"""
+<div class="section">
+  <div class="phase-header">
+    <div class="phase-badge" style="background:#8b5cf622;color:#a78bfa;border-color:#8b5cf666;">G</div>
+    <div class="phase-title">AIS Vessel Attribution</div>
+    <div class="phase-subtitle">Vessel cross-reference</div>
+  </div>
+  <p class="unavail">{ais_note or "AIS attribution not run."}</p>
+</div>
+"""
+
+    top_html = ""
+    if top:
+        score = top.get("suspicion_score", 0)
+        score_color = "#ff4444" if score >= 6 else "#f5a623" if score >= 3 else "#6b8299"
+
+        flags = " · ".join(top.get("suspicion_flags", []) or ["—"])
+
+        top_html = f"""
+<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);
+border-radius:4px;padding:14px 16px;margin-bottom:16px;">
+  <div style="font-family:var(--mono);font-size:9px;color:#a78bfa;
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">
+  Highest Suspicion Vessel
+  </div>
+
+  <div class="two-col">
+    <div>
+      <table class="data-table">
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Name</td><td class="val">{top.get("name","—")}</td></tr>
+        <tr><td>Type</td><td class="val">{top.get("vessel_type","—")}</td></tr>
+        <tr><td>MMSI</td><td class="val">{top.get("mmsi","—")}</td></tr>
+        <tr><td>IMO</td><td class="val">{top.get("imo") or "—"}</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <table class="data-table">
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Score</td><td class="val" style="color:{score_color};">{score}/10</td></tr>
+        <tr><td>Distance</td><td class="val">{top.get("distance_nm","—")} nm</td></tr>
+        <tr><td>Speed</td><td class="val">{top.get("speed_knots","—")} kts</td></tr>
+        <tr><td>Status</td><td class="val">{top.get("nav_status_label","—")}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <p class="field-note" style="color:{score_color};">{flags}</p>
+</div>
+"""
+
+    if rows:
+        header = "".join(f"<th>{k}</th>" for k in rows[0].keys())
+
+        body = ""
+        for r in rows:
+            body += "<tr>" + "".join(f"<td>{v}</td>" for v in r.values()) + "</tr>"
+
+        table_html = f"""
+<table class="data-table" style="font-size:9px;">
+<tr>{header}</tr>
+{body}
+</table>
+"""
+    else:
+        table_html = '<p class="unavail">No vessels found within search radius.</p>'
+
+    return f"""
+<div class="section">
+  <div class="phase-header">
+    <div class="phase-badge" style="background:#8b5cf622;color:#a78bfa;border-color:#8b5cf666;">G</div>
+    <div class="phase-title">AIS Vessel Attribution</div>
+    <div class="phase-subtitle">{ais_source} &mdash; {radius_nm:.0f} nm radius &mdash; {ais_found} vessel(s)</div>
+  </div>
+
+  {top_html}
+
+  <p class="field-label">All Vessels in Search Area</p>
+  {table_html}
+
+  <p class="field-note">Queried: {ais_queried} {ais_note}</p>
+</div>
+"""
 
 def _render_html(d: dict) -> str:
     detection_id   = d.get("id", "UNKNOWN")
@@ -186,6 +304,9 @@ def _render_html(d: dict) -> str:
     optical_scene      = d.get("optical_scene_name") or "—"
     thumb_rgb          = d.get("optical_thumbnail_rgb")
     thumb_fc           = d.get("optical_thumbnail_falsecolour")
+
+    if d.get("ais_vessels_found") is not None:
+    phases_run.append(("Phase G AIS", "COMPLETE", "#a78bfa"))
 
     # Verdict colours
     c_verdict = {
@@ -405,6 +526,10 @@ def _render_html(d: dict) -> str:
 
 <hr class="divider"/>
 
+{_render_ais_section(d)}
+
+<hr class="divider"/>
+
 <!-- ========================================================
      METHODOLOGY
      ======================================================== -->
@@ -416,6 +541,7 @@ def _render_html(d: dict) -> str:
     <li><strong>Look-alike Classification (Phase C):</strong> A MobileNet-style binary CNN classifies the detected region as confirmed oil or a look-alike. Oil probability must exceed 0.60 to trigger an alert.</li>
     <li><strong>Wind Context (Phase D):</strong> ERA5 reanalysis 10m wind data is fetched from the Copernicus Climate Data Store at the detection location and acquisition time. SAR oil detection is reliable only between 2&ndash;10 m/s. A 3% empirical drift factor computes slick trajectory.</li>
     <li><strong>Optical Cross-Validation (Phase E):</strong> The nearest Sentinel-2 L2A scene within &plusmn;3 days is processed. The Oil Spill Index (OSI), SWIR suppression ratio (SWIRI), and NDWI are computed at the detection centroid. SWIRI &lt;0.20 indicates strong SWIR backscatter suppression consistent with oil &mdash; peer-reviewed accuracy &gt;88%, specificity &gt;95%.</li>
+   <li><strong>AIS Vessel Attribution (Phase G):</strong> Nearby vessels broadcasting AIS transponder signals are queried within a configurable nautical-mile radius. Candidate vessels are ranked using proximity, speed, navigation state, and anomaly indicators to identify likely polluters.</li>
   </ul>
   <p>All detections are stored permanently in the Spectra database with a full evidence trail for legal and regulatory use.</p>
 </div>
@@ -425,7 +551,7 @@ def _render_html(d: dict) -> str:
      ======================================================== -->
 <div class="report-footer">
   <div>Spectra v{SPECTRA_VERSION} &mdash; Generated {generated_at}</div>
-  <div>Data sources: Sentinel-1 (ESA/Copernicus) &middot; ERA5 (ECMWF/Copernicus CDS) &middot; Sentinel-2 L2A (ESA/Copernicus)</div>
+  <div>Data sources: Sentinel-1 (ESA/Copernicus) &middot; ERA5 (ECMWF/Copernicus CDS) &middot; Sentinel-2 L2A (ESA/Copernicus) &middot; AIS vessel feeds</div>
   <div>This document is computer-generated. All timestamps are UTC. Retain the original database record as the authoritative evidence source.</div>
 </div>
 

@@ -17,6 +17,7 @@ from backend.optical_validator import OpticalValidator
 from backend.database import init_db, get_db, Detection, WatchZone, AlertLog
 from fastapi.responses import Response as FastAPIResponse
 from backend.report_generator import ReportGenerator
+from backend.ais_attribution import AISAttribution
 
 app = FastAPI(title="Spectra API", version="2.0.0")
 
@@ -31,11 +32,12 @@ MODELS_DIR = Path("models")
 PATCHES_DIR = Path("data/patches")
 TEST_DIR = Path("data/raw/oil-spill/test/images")
 
-# Init DB on startup
+# Init DB and Core Services
 init_db()
 _wind_context = WindContextLayer()
 _optical_validator = OpticalValidator()
 _report_generator = ReportGenerator()
+_ais_attribution = AISAttribution()
 
 def load_model():
     model = smp.Unet(
@@ -149,7 +151,6 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
             lookalike_score=round(confidence, 4) if spill_pixels > 100 else None,
             lookalike_label="oil" if spill_pixels > 100 else None,
             lookalike_passed=True if spill_pixels > 100 else None,
-
             status="complete"
         )
         db.add(det)
@@ -164,8 +165,6 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
         db.close()
     
 
-
-
 # ─── ROUTES ────────────────────────────────────────────────
 
 @app.get("/")
@@ -176,7 +175,6 @@ def root():
         "status": "online",
         "version": "2.0.0"
     }
-
 
 @app.get("/health")
 def health():
@@ -217,7 +215,6 @@ def create_watch_zone(data: WatchZoneCreate, db: Session = Depends(get_db)):
         "message": "Watch zone created successfully"
     }
 
-
 @app.get("/watch-zones")
 def get_watch_zones(db: Session = Depends(get_db)):
     zones = db.query(WatchZone).filter(WatchZone.active == True).all()
@@ -236,7 +233,6 @@ def get_watch_zones(db: Session = Depends(get_db)):
         ],
         "total": len(zones)
     }
-
 
 @app.delete("/watch-zones/{zone_id}")
 def delete_watch_zone(zone_id: str, db: Session = Depends(get_db)):
@@ -273,7 +269,6 @@ def get_detections(db: Session = Depends(get_db)):
         "total": len(dets)
     }
 
-
 @app.get("/detections/{detection_id}")
 def get_detection(detection_id: str, db: Session = Depends(get_db)):
     d = db.query(Detection).filter(Detection.id == detection_id).first()
@@ -293,373 +288,191 @@ def get_detection(detection_id: str, db: Session = Depends(get_db)):
         "status": d.status
     }
 
-    @app.get("/detections/{detection_id}/report")
-    async def download_report(detection_id: str, db: Session = Depends(get_db)):
-    """
-    Generate and download PDF evidence report for a detection.
-    Includes look-alike, wind and optical data.
-    """
-
+@app.get("/detections/{detection_id}/report")
+async def download_report(detection_id: str, db: Session = Depends(get_db)):
     if not _report_generator.is_available():
         raise HTTPException(
             status_code=503,
-            detail=(
-                "PDF generation unavailable. "
-                "Install system deps: "
-                "sudo apt-get install -y libpango-1.0-0 "
-                "libpangoft2-1.0-0 libharfbuzz-subset0 "
-                "then: pip install weasyprint --break-system-packages"
-            )
+            detail="PDF generation unavailable. Install system deps (libpango, weasyprint)."
         )
 
     det = db.query(Detection).filter(Detection.id == detection_id).first()
-
     if not det:
         raise HTTPException(status_code=404, detail="Detection not found")
 
     try:
         pdf_bytes = _report_generator.generate(det)
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Report generation failed: {exc}"
+        filename = f"spectra_detection_{detection_id}.pdf"
+        return FastAPIResponse(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-
-    filename = f"spectra_detection_{detection_id}.pdf"
-
-    return FastAPIResponse(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition":
-            f'attachment; filename="{filename}"'
-        },
-    )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Report generation failed: {exc}")
 
 @app.post("/detections/{detection_id}/wind")
 def refresh_wind(detection_id: str, db: Session = Depends(get_db)):
-    """
-    Re-fetch wind context for an existing detection.
-    Safe integration:
-    - Uses existing schema fields if present
-    - Derives centroid from polygon_geojson (since your model has no centroid columns)
-    - Uses detected_at timestamp (since your model has no timestamp column)
-    """
-
     det = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not det or not det.polygon_geojson:
+        raise HTTPException(status_code=400, detail="Detection missing or invalid")
 
-    if not det:
-        raise HTTPException(status_code=404, detail="Detection not found")
-
-    if not det.polygon_geojson:
-        raise HTTPException(status_code=400, detail="Detection missing polygon")
-
-    try:
-        polygon = json.loads(det.polygon_geojson)
-        coords = polygon["coordinates"][0]
-
-        lons = [p[0] for p in coords]
-        lats = [p[1] for p in coords]
-
-        centroid_lon = sum(lons) / len(lons)
-        centroid_lat = sum(lats) / len(lats)
-
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid polygon geometry")
-
-    timestamp = (
-        det.detected_at.isoformat()
-        if det.detected_at
-        else datetime.utcnow().isoformat()
-    )
+    polygon = json.loads(det.polygon_geojson)
+    coords = polygon["coordinates"][0]
+    centroid_lat = sum(p[1] for p in coords) / len(coords)
+    centroid_lon = sum(p[0] for p in coords) / len(coords)
 
     wind = _wind_context.get_context(
         lat=centroid_lat,
         lon=centroid_lon,
-        timestamp=timestamp,
+        timestamp=det.detected_at.isoformat() if det.detected_at else datetime.utcnow().isoformat(),
     )
 
-    # Update DB fields safely
     det.wind_speed_ms = wind["wind_speed_ms"]
     det.wind_direction_deg = wind["wind_direction_deg"]
     det.wind_u = wind["wind_u"]
     det.wind_v = wind["wind_v"]
-
     det.sar_validity = wind["sar_validity"]
-    det.sar_validity_detail = wind["sar_validity_detail"]
-
     det.lookalike_wind_risk = wind["lookalike_wind_risk"]
-    det.lookalike_wind_note = wind["lookalike_wind_note"]
-
     det.wind_fetched_at = wind["wind_fetched_at"]
-    det.wind_data_source = wind["wind_data_source"]
-
-    # keep backward compatibility with your old fields
-    det.wind_speed = wind["wind_speed_ms"]
-    det.wind_reliable = wind["sar_validity"] == "valid"
 
     if wind["drift_vector"]:
         det.drift_bearing_deg = wind["drift_vector"]["bearing_deg"]
-        det.drift_speed_ms = wind["drift_vector"]["speed_ms"]
         det.drift_24h_km = wind["drift_vector"]["24h_km"]
-
-        det.drift_geojson = json.dumps(
-            drift_arrow_geojson(
-                centroid_lat,
-                centroid_lon,
-                wind["drift_vector"],
-                hours=24
-            )
-        )
+        det.drift_geojson = json.dumps(drift_arrow_geojson(centroid_lat, centroid_lon, wind["drift_vector"]))
 
     db.commit()
-    db.refresh(det)
+    return {"status": "success", "wind_speed": det.wind_speed_ms}
 
-    return {
-        "detection_id": det.id,
-        "wind_speed_ms": det.wind_speed_ms,
-        "wind_direction_deg": det.wind_direction_deg,
-        "sar_validity": det.sar_validity,
-        "lookalike_wind_risk": det.lookalike_wind_risk,
-        "drift_bearing_deg": det.drift_bearing_deg,
-        "drift_24h_km": det.drift_24h_km,
-        "wind_fetched_at": det.wind_fetched_at,
-    }
-
-    @app.post("/detections/{detection_id}/optical")
-    async def revalidate_optical(detection_id: str, db: Session = Depends(get_db)):
-
+@app.post("/detections/{detection_id}/optical")
+async def revalidate_optical(detection_id: str, db: Session = Depends(get_db)):
     det = db.query(Detection).filter(Detection.id == detection_id).first()
-
-    if not det:
-        raise HTTPException(404, "Detection not found")
-
-    if not det.polygon_geojson:
-        raise HTTPException(400, "Detection missing polygon")
+    if not det or not det.polygon_geojson:
+        raise HTTPException(400, "Invalid detection")
 
     polygon = json.loads(det.polygon_geojson)
-
-    # ── centroid extraction (robust) ─────────────────────────────
     coords = polygon["coordinates"][0]
-
-    lons = [p[0] for p in coords]
-    lats = [p[1] for p in coords]
-
-    centroid_lat = sum(lats) / len(lats)
-    centroid_lon = sum(lons) / len(lons)
-
-    # ── timestamp fallback ───────────────────────────────────────
-    scene_timestamp = (
-        det.detected_at.isoformat()
-        if det.detected_at
-        else datetime.utcnow().isoformat()
-    )
+    centroid_lat = sum(p[1] for p in coords) / len(coords)
+    centroid_lon = sum(p[0] for p in coords) / len(coords)
 
     result = _optical_validator.validate(
-        lat=centroid_lat,
-        lon=centroid_lon,
+        lat=centroid_lat, lon=centroid_lon,
         detection_polygon=polygon,
-        scene_timestamp=scene_timestamp,
-        local_scene_path=None,
+        scene_timestamp=det.detected_at.isoformat() if det.detected_at else datetime.utcnow().isoformat()
     )
 
-    # ── save back to DB ─────────────────────────────────────────
     det.optical_verdict = result["optical_verdict"]
-    det.optical_reason = result["optical_reason"]
     det.optical_confidence = result["optical_confidence"]
     det.optical_cloud_fraction = result["optical_cloud_fraction"]
-    det.optical_osi = result["optical_osi"]
-    det.optical_swiri = result["optical_swiri"]
-    det.optical_ndwi = result["optical_ndwi"]
-    det.optical_scene_name = result["optical_scene_name"]
-    det.optical_scene_timestamp = result["optical_scene_timestamp"]
     det.optical_thumbnail_rgb = result["optical_thumbnail_rgb"]
-    det.optical_thumbnail_falsecolour = result["optical_thumbnail_falsecolour"]
     det.optical_validated_at = result["optical_validated_at"]
+
+    db.commit()
+    return {"status": "success", "verdict": det.optical_verdict}
+
+@app.get("/detections/{detection_id}/optical/thumbnail/{kind}")
+def get_optical_thumbnail(detection_id: str, kind: str, db: Session = Depends(get_db)):
+    import base64
+    from fastapi.responses import Response
+    det = db.query(Detection).filter(Detection.id == detection_id).first()
+    field = "optical_thumbnail_rgb" if kind == "rgb" else "optical_thumbnail_falsecolour"
+    b64_uri = getattr(det, field, None)
+    if not b64_uri: raise HTTPException(404, "Not available")
+    img_bytes = base64.b64decode(b64_uri.split(",")[1])
+    return Response(content=img_bytes, media_type="image/png")
+
+# ─── AIS ATTRIBUTION (NEW) ──────────────────────────────────
+
+@app.post("/detections/{detection_id}/ais")
+async def run_ais_attribution(
+    detection_id: str,
+    radius_nm: float = 10.0,
+    db: Session = Depends(get_db),
+):
+    if not _ais_attribution.is_available():
+        raise HTTPException(status_code=503, detail="AISHUB_USERNAME not configured.")
+
+    det = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not det or not det.polygon_geojson:
+        raise HTTPException(status_code=400, detail="Detection missing polygon")
+
+    # Centroid extraction
+    polygon = json.loads(det.polygon_geojson)
+    coords = polygon["coordinates"][0]
+    centroid_lat = sum(p[1] for p in coords) / len(coords)
+    centroid_lon = sum(p[0] for p in coords) / len(coords)
+
+    ais = _ais_attribution.attribute(
+        lat=centroid_lat,
+        lon=centroid_lon,
+        timestamp=det.detected_at.isoformat() if det.detected_at else datetime.utcnow().isoformat(),
+        radius_nm=radius_nm,
+    )
+
+    det.ais_vessels_found    = ais["ais_vessels_found"]
+    det.ais_candidates       = json.dumps(ais["ais_candidates"])
+    det.ais_top_suspect      = json.dumps(ais["ais_top_suspect"])
+    det.ais_search_radius_nm = ais["ais_search_radius_nm"]
+    det.ais_queried_at       = ais["ais_queried_at"]
+    det.ais_data_source      = ais["ais_data_source"]
+    det.ais_note             = ais["ais_note"]
 
     db.commit()
     db.refresh(det)
 
     return {
         "detection_id": detection_id,
-        "optical_verdict": det.optical_verdict,
-        "optical_confidence": det.optical_confidence,
-        "optical_cloud_fraction": det.optical_cloud_fraction,
-        "optical_osi": det.optical_osi,
-        "optical_swiri": det.optical_swiri,
-        "optical_ndwi": det.optical_ndwi,
-        "optical_scene_name": det.optical_scene_name,
-        "optical_validated_at": det.optical_validated_at,
-    }
-
-@app.get("/detections/{detection_id}/optical/thumbnail/{kind}")
-    def get_optical_thumbnail(detection_id: str, kind: str, db: Session = Depends(get_db)):
-    import base64
-    from fastapi.responses import Response
-
-    det = db.query(Detection).filter(Detection.id == detection_id).first()
-
-    if not det:
-        raise HTTPException(404, "Detection not found")
-
-    field = (
-        "optical_thumbnail_rgb"
-        if kind == "rgb"
-        else "optical_thumbnail_falsecolour"
-    )
-
-    b64_uri = getattr(det, field, None)
-
-    if not b64_uri:
-        raise HTTPException(404, "Thumbnail not available")
-
-    img_bytes = base64.b64decode(b64_uri.split(",")[1])
-
-    return Response(content=img_bytes, media_type="image/png")
-
-@app.delete("/detections/{detection_id}")
-def delete_detection(detection_id: str, db: Session = Depends(get_db)):
-    d = db.query(Detection).filter(Detection.id == detection_id).first()
-    if not d:
-        return {"error": "Not found"}
-    db.delete(d)
-    db.commit()
-    return {"message": f"Detection {detection_id} deleted"}
-
-
-# ─── SCAN ──────────────────────────────────────────────────
-
-@app.post("/scan")
-def trigger_scan(request: ScanRequest, background_tasks: BackgroundTasks):
-    scan_id = str(uuid.uuid4())[:8]
-    background_tasks.add_task(run_scan_job, scan_id, request.watch_zone_id)
-    return {
-        "scan_id": scan_id,
-        "status": "running",
-        "message": "Scan started. Poll /detections for results."
+        "ais_vessels_found": det.ais_vessels_found,
+        "ais_top_suspect": json.loads(det.ais_top_suspect) if det.ais_top_suspect else None,
+        "ais_candidates": json.loads(det.ais_candidates) if det.ais_candidates else [],
     }
 
 
-# ─── ALERTS ────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────
-# PATCH YOUR EXISTING /alerts/dispatch ROUTE ONLY
-# Replace your current dispatch_alerts() with this version.
-# Nothing else in your file needs removal.
-# ─────────────────────────────────────────────────────────────
+# ─── ALERTS & SCENES ───────────────────────────────────────
 
 @app.post("/alerts/dispatch")
 def dispatch_alerts(data: AlertDispatch, db: Session = Depends(get_db)):
     detection = db.query(Detection).filter(Detection.id == data.detection_id).first()
+    if not detection: return {"error": "Not found"}
 
-    if not detection:
-        return {"error": "Detection not found"}
-
-    # ── LOOKALIKE ALERT GATE (NEW) ───────────────────────────
-    # Fail-open behavior:
-    # If column/value doesn't exist, alerts still proceed.
     lookalike_passed = getattr(detection, "lookalike_passed", True)
-    lookalike_score = getattr(detection, "lookalike_score", None)
-    lookalike_label = getattr(detection, "lookalike_label", None)
-
     if lookalike_passed is False:
-        import logging
-
-        logging.getLogger(__name__).info(
-            "Detection suppressed by look-alike classifier "
-            "(score=%s, label=%s)",
-            str(lookalike_score),
-            str(lookalike_label),
-        )
-
-        return {
-            "detection_id": detection.id,
-            "status": "suppressed",
-            "reason": "Blocked by look-alike classifier",
-            "lookalike_score": lookalike_score,
-            "lookalike_label": lookalike_label,
-        }
-    # ─────────────────────────────────────────────────────────
+        return {"status": "suppressed", "reason": "Look-alike check failed"}
 
     from backend.alerts import send_spill_alert
-
-    det_dict = {
-        "id": detection.id,
-        "confidence": detection.confidence,
-        "area_km2": detection.area_km2,
-        "detected_at": detection.detected_at.isoformat(),
-        "scene": detection.scene,
-        "spill_pixels": detection.spill_pixels,
-
-        # Include classifier fields too
-        "lookalike_score": lookalike_score,
-        "lookalike_label": lookalike_label,
-        "lookalike_passed": lookalike_passed,
-    }
-
+    det_dict = {"id": detection.id, "confidence": detection.confidence, "area_km2": detection.area_km2}
+    
     results = []
-
     for recipient in data.recipients:
         try:
             send_spill_alert(det_dict)
-
-            log = AlertLog(
-                detection_id=detection.id,
-                recipient=recipient,
-                sent_at=datetime.utcnow(),
-                success=True
-            )
-            db.add(log)
-
-            results.append({
-                "email": recipient,
-                "status": "sent"
-            })
-
-        except Exception as e:
-            results.append({
-                "email": recipient,
-                "status": f"failed: {str(e)}"
-            })
+            db.add(AlertLog(detection_id=detection.id, recipient=recipient, sent_at=datetime.utcnow(), success=True))
+            results.append({"email": recipient, "status": "sent"})
+        except:
+            results.append({"email": recipient, "status": "failed"})
 
     detection.alert_sent = True
-    detection.alert_recipients = json.dumps(data.recipients)
-
     db.commit()
-
-    return {
-        "detection_id": data.detection_id,
-        "results": results,
-        "total_sent": len(
-            [r for r in results if r["status"] == "sent"]
-        )
-    }
-
-@app.get("/alerts/logs")
-def get_alert_logs(db: Session = Depends(get_db)):
-    logs = db.query(AlertLog).order_by(AlertLog.sent_at.desc()).limit(50).all()
-    return {
-        "logs": [
-            {
-                "detection_id": l.detection_id,
-                "recipient": l.recipient,
-                "sent_at": l.sent_at.isoformat(),
-                "success": l.success
-            }
-            for l in logs
-        ]
-    }
-
-
-# ─── SCENES ────────────────────────────────────────────────
+    return {"results": results}
 
 @app.get("/scenes")
 def list_scenes():
     scenes = []
     scenes_dir = Path("data/scenes")
-    for f in scenes_dir.glob("*.SAFE"):
-        scenes.append({"name": f.name, "type": "SAFE", "source": "local"})
-    for f in scenes_dir.glob("*.zip"):
-        scenes.append({"name": f.name, "type": "zip", "source": "local"})
-    return {"scenes": scenes, "total": len(scenes)}
+    if scenes_dir.exists():
+        for f in scenes_dir.glob("*.SAFE"): scenes.append({"name": f.name, "type": "SAFE"})
+    return {"scenes": scenes}
+
+@app.delete("/detections/{detection_id}")
+def delete_detection(detection_id: str, db: Session = Depends(get_db)):
+    d = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not d: return {"error": "Not found"}
+    db.delete(d)
+    db.commit()
+    return {"message": "Deleted"}
+
+@app.post("/scan")
+def trigger_scan(request: ScanRequest, background_tasks: BackgroundTasks):
+    scan_id = str(uuid.uuid4())[:8]
+    background_tasks.add_task(run_scan_job, scan_id, request.watch_zone_id)
+    return {"scan_id": scan_id, "status": "running"}

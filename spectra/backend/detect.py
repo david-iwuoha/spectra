@@ -14,6 +14,7 @@ import logging
 from backend.lookalike_classifier import LookalikeClassifier
 from backend.wind_context import WindContextLayer, drift_arrow_geojson #phase D
 from backend.optical_validator import OpticalValidator #phase E
+from backend.ais_attribution import AISAttribution #phaseF
 
 
 
@@ -28,6 +29,7 @@ _lookalike_classifier = LookalikeClassifier(
 )
 _wind_context = WindContextLayer()
 _optical_validator = OpticalValidator()
+_ais_attribution = AISAttribution()
 
 def load_model():
     model = smp.Unet(
@@ -206,7 +208,7 @@ def run_detection(vv_path: str, vh_path: str = None):
     # ────────────────────────────────────────────────────────────────────────
     # ── Phase E: Optical cross-validation ───────────────────────────────
     if geojson_polygon is not None and polygons:
-    try:
+      try:
         largest_polygon = max(polygons, key=lambda p: p.area)
         centroid = largest_polygon.centroid
         centroid_lat = float(centroid.y)
@@ -285,6 +287,37 @@ def run_detection(vv_path: str, vh_path: str = None):
         "optical_thumbnail_falsecolour": optical["optical_thumbnail_falsecolour"],
         "optical_validated_at": optical["optical_validated_at"],
     }
+
+        # ── Phase F: AIS Attribution (non-blocking placement) ─────────────
+    try:
+        if geojson_polygon is not None and polygons:
+            largest_polygon = max(polygons, key=lambda p: p.area)
+            centroid = largest_polygon.centroid
+
+            centroid_lat = float(centroid.y)
+            centroid_lon = float(centroid.x)
+
+            ais = _ais_attribution.attribute(
+                lat=centroid_lat,
+                lon=centroid_lon,
+                timestamp=_extract_scene_timestamp(vv_path),
+                radius_nm=10.0,
+            )
+
+            result.update(ais)
+
+        else:
+            result.update({
+                "ais_match_found": False,
+                "ais_reason": "No polygon centroid available"
+            })
+
+    except Exception as e:
+        logger.exception("AIS attribution failed")
+        result.update({
+            "ais_match_found": False,
+            "ais_reason": str(e)
+        })
 
     return result
 

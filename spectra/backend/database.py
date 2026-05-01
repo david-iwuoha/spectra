@@ -1,7 +1,15 @@
-from sqlalchemy import create_engine, Column, String, Float, Boolean, DateTime, Integer, Text
+from sqlalchemy import (
+    create_engine,
+    Column,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    Integer,
+    Text,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
-import os
 from pathlib import Path
 
 DB_PATH = Path("data/spectra.db")
@@ -9,7 +17,11 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -30,51 +42,56 @@ class WatchZone(Base):
 class Detection(Base):
     __tablename__ = "detections"
 
+    # Core Detection
     id = Column(String, primary_key=True)
     watch_zone_id = Column(String, nullable=True)
     scene = Column(String, nullable=True)
     detected_at = Column(DateTime, default=datetime.utcnow)
+
     confidence = Column(Float, default=0.0)
     area_km2 = Column(Float, default=0.0)
     spill_pixels = Column(Integer, default=0)
+
     polygon_geojson = Column(Text, nullable=True)
+
     detected = Column(Boolean, default=False)
     alert_sent = Column(Boolean, default=False)
     alert_recipients = Column(Text, nullable=True)
 
+    status = Column(String, default="complete")
+
+    # Legacy Wind Fields
     wind_speed = Column(Float, nullable=True)
     wind_reliable = Column(Boolean, nullable=True)
-    
 
+    # ── Phase C: Look-alike Classifier ─────────────────────────────
     lookalike_score = Column(Float, nullable=True)
     lookalike_label = Column(String, nullable=True)
     lookalike_passed = Column(Boolean, nullable=True)
 
-    status = Column(String, default="complete")
-
-    # ── Phase D: Wind + Drift Intelligence ────────────────────────────────
+    # ── Phase D: Wind + Drift Intelligence ────────────────────────
     wind_speed_ms = Column(Float, nullable=True)
     wind_direction_deg = Column(Float, nullable=True)
+
     wind_u = Column(Float, nullable=True)
     wind_v = Column(Float, nullable=True)
 
-    sar_validity = Column(String, nullable=True)  # valid|too_low|too_high|borderline|unavailable|error
+    sar_validity = Column(String, nullable=True)
     sar_validity_detail = Column(String, nullable=True)
 
-    lookalike_wind_risk = Column(String, nullable=True)  # high|medium|low|unknown
+    lookalike_wind_risk = Column(String, nullable=True)
     lookalike_wind_note = Column(String, nullable=True)
 
     drift_bearing_deg = Column(Float, nullable=True)
     drift_speed_ms = Column(Float, nullable=True)
     drift_24h_km = Column(Float, nullable=True)
 
-    drift_geojson = Column(Text, nullable=True)  # JSON string
+    drift_geojson = Column(Text, nullable=True)
 
-    wind_fetched_at = Column(String, nullable=True)  # ISO-8601
+    wind_fetched_at = Column(String, nullable=True)
     wind_data_source = Column(String, nullable=True)
-    # ──────────────────────────────────────────────────────────────────────
 
-        # ── Phase E: Optical Cross-Validation ────────────────────────────────
+    # ── Phase E: Optical Cross-Validation ────────────────────────
     optical_verdict = Column(String, nullable=True)
     optical_reason = Column(String, nullable=True)
     optical_confidence = Column(Float, nullable=True)
@@ -91,7 +108,16 @@ class Detection(Base):
     optical_thumbnail_falsecolour = Column(Text, nullable=True)
 
     optical_validated_at = Column(String, nullable=True)
- # ──────────────────────────────────────────────────────────────────────
+
+    # ── Phase F: AIS Vessel Attribution ──────────────────────────
+    ais_vessels_found = Column(Integer, nullable=True)
+    ais_candidates = Column(Text, nullable=True)      # JSON list
+    ais_top_suspect = Column(Text, nullable=True)     # JSON object
+
+    ais_search_radius_nm = Column(Float, nullable=True)
+    ais_queried_at = Column(String, nullable=True)
+    ais_data_source = Column(String, nullable=True)
+    ais_note = Column(Text, nullable=True)
 
 
 class AlertLog(Base):
