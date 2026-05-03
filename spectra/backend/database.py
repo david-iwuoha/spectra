@@ -46,7 +46,7 @@ class Detection(Base):
     id = Column(String, primary_key=True)
     watch_zone_id = Column(String, nullable=True)
     scene = Column(String, nullable=True)
-    detected_at = Column(DateTime, default=datetime.utcnow)
+    detected_at = Column(DateTime, default=None)
 
     confidence = Column(Float, default=0.0)
     area_km2 = Column(Float, default=0.0)

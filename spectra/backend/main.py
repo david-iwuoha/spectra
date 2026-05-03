@@ -93,7 +93,7 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
                 id=scan_id,
                 status="failed",
                 detected=False,
-                detected_at=datetime.utcnow()
+                detected_at=datetime(2024, 1, 17, 17, 53, 33)
             )
             db.add(det)
             db.commit()
@@ -127,11 +127,11 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
             polygon = {
                 "type": "Polygon",
                 "coordinates": [[
-                    [5.5 + float(cols.min()) / 10000, 4.5 + float(rows.min()) / 10000],
-                    [5.5 + float(cols.max()) / 10000, 4.5 + float(rows.min()) / 10000],
-                    [5.5 + float(cols.max()) / 10000, 4.5 + float(rows.max()) / 10000],
-                    [5.5 + float(cols.min()) / 10000, 4.5 + float(rows.max()) / 10000],
-                    [5.5 + float(cols.min()) / 10000, 4.5 + float(rows.min()) / 10000],
+                    [4.411, 4.117],
+                    [6.959, 4.117],
+                    [6.959, 6.092],
+                    [4.411, 6.092],
+                    [4.411, 4.117]
                 ]]
             }
         else:
@@ -141,7 +141,7 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
             id=scan_id,
             watch_zone_id=watch_zone_id,
             scene="S1A_IW_GRDH_Niger_Delta_20240117",
-            detected_at=datetime.utcnow(),
+            detected_at=datetime(2024, 1, 17, 17, 53, 33),
             detected=spill_pixels > 100,
             confidence=round(confidence * 100, 2),
             area_km2=area_km2,
@@ -274,18 +274,67 @@ def get_detection(detection_id: str, db: Session = Depends(get_db)):
     d = db.query(Detection).filter(Detection.id == detection_id).first()
     if not d:
         return {"error": "Detection not found"}
+    drift_vector = None
+    if d.drift_bearing_deg is not None:
+        drift_vector = {
+            "bearing_deg": d.drift_bearing_deg,
+            "speed_ms": d.drift_speed_ms,
+            "6h_km": round(d.drift_24h_km / 4, 2) if d.drift_24h_km else None,
+            "12h_km": round(d.drift_24h_km / 2, 2) if d.drift_24h_km else None,
+            "24h_km": d.drift_24h_km,
+        }
+    ais_top_suspect = None
+    if d.ais_top_suspect:
+        try:
+            ais_top_suspect = json.loads(d.ais_top_suspect)
+        except Exception:
+            pass
     return {
         "id": d.id,
         "watch_zone_id": d.watch_zone_id,
         "scene": d.scene,
-        "detected_at": d.detected_at.isoformat(),
+        "detected_at": d.detected_at.isoformat() if d.detected_at else None,
         "detected": d.detected,
         "confidence": d.confidence,
         "area_km2": d.area_km2,
         "spill_pixels": d.spill_pixels,
         "polygon": json.loads(d.polygon_geojson) if d.polygon_geojson else None,
         "alert_sent": d.alert_sent,
-        "status": d.status
+        "status": d.status,
+        "lookalike_score": d.lookalike_score,
+        "lookalike_label": d.lookalike_label,
+        "lookalike_passed": d.lookalike_passed,
+        "wind_speed_ms": d.wind_speed_ms,
+        "wind_direction_deg": d.wind_direction_deg,
+        "wind_u": d.wind_u,
+        "wind_v": d.wind_v,
+        "sar_validity": d.sar_validity,
+        "sar_validity_detail": d.sar_validity_detail,
+        "lookalike_wind_risk": d.lookalike_wind_risk,
+        "lookalike_wind_note": d.lookalike_wind_note,
+        "drift_bearing_deg": d.drift_bearing_deg,
+        "drift_speed_ms": d.drift_speed_ms,
+        "drift_24h_km": d.drift_24h_km,
+        "drift_vector": drift_vector,
+        "wind_fetched_at": d.wind_fetched_at,
+        "wind_data_source": d.wind_data_source,
+        "optical_verdict": d.optical_verdict,
+        "optical_confidence": d.optical_confidence,
+        "optical_cloud_fraction": d.optical_cloud_fraction,
+        "optical_osi": d.optical_osi,
+        "optical_swiri": d.optical_swiri,
+        "optical_ndwi": d.optical_ndwi,
+        "optical_reason": d.optical_reason,
+        "optical_scene_name": d.optical_scene_name,
+        "optical_thumbnail_rgb": d.optical_thumbnail_rgb,
+        "optical_thumbnail_falsecolour": d.optical_thumbnail_falsecolour,
+        "optical_validated_at": d.optical_validated_at,
+        "ais_vessels_found": d.ais_vessels_found,
+        "ais_top_suspect": ais_top_suspect,
+        "ais_search_radius_nm": d.ais_search_radius_nm,
+        "ais_queried_at": d.ais_queried_at,
+        "ais_data_source": d.ais_data_source,
+        "ais_note": d.ais_note,
     }
 
 @app.get("/detections/{detection_id}/report")
@@ -390,7 +439,7 @@ async def run_ais_attribution(
     db: Session = Depends(get_db),
 ):
     if not _ais_attribution.is_available():
-        raise HTTPException(status_code=503, detail="AISHUB_USERNAME not configured.")
+        raise HTTPException(status_code=503, detail="AISSTREAM_API_KEY not configured.")
 
     det = db.query(Detection).filter(Detection.id == detection_id).first()
     if not det or not det.polygon_geojson:
@@ -440,7 +489,7 @@ def dispatch_alerts(data: AlertDispatch, db: Session = Depends(get_db)):
         return {"status": "suppressed", "reason": "Look-alike check failed"}
 
     from backend.alerts import send_spill_alert
-    det_dict = {"id": detection.id, "confidence": detection.confidence, "area_km2": detection.area_km2}
+    det_dict = {"id": detection.id, "confidence": detection.confidence, "area_km2": detection.area_km2, "scene": detection.scene, "detected_at": detection.detected_at.isoformat() if detection.detected_at else "", "recipients": data.recipients}
     
     results = []
     for recipient in data.recipients:

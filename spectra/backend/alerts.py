@@ -89,9 +89,10 @@ def send_spill_alert(detection: dict):
     """
 
     try:
+        to_list = detection.get("recipients") or ALERT_RECIPIENTS
         response = resend.Emails.send({
             "from": "Spectra Alerts <onboarding@resend.dev>",
-            "to": ALERT_RECIPIENTS,
+            "to": to_list,
             "subject": subject,
             "html": html_body,
         })

@@ -1043,7 +1043,7 @@ body {
 
 <!-- ═══════════════════════════════ JAVASCRIPT ═══════════════════════════════ -->
 <script>
-const API = 'https://silver-space-lamp-x5w6pj4wxpvjf9w5-3000.app.github.dev';
+const API = 'https://silver-space-lamp-x5w6pj4wxpvjf9w5-8000.app.github.dev';
 
 /* ── Clock ── */
 function updateClock(){
@@ -1055,8 +1055,12 @@ updateClock();
 
 /* ── Map init ── */
 const map = L.map('map', {center:[5.0, 6.5], zoom:8, zoomControl:true, attributionControl:false});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18, subdomains:'abcd'}).addTo(map);
-
+var baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:18, subdomains:'abcd'});
+baseLayer.on('tileerror', function(){
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+});
+baseLayer.addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:18, opacity:0.5}).addTo(map);
 /* ── Layer groups ── */
 var spillLayerGroup    = L.layerGroup().addTo(map);
 var pipelineLayerGroup = L.layerGroup().addTo(map);
@@ -1332,14 +1336,22 @@ async function refreshWindForDetection(id, el){
   var btn = el.querySelector('.action-btn[data-action="wind"]');
   if(btn){ btn.textContent='Fetching...'; btn.disabled=true; }
   try {
-    var res = await fetch(API+'/detections/'+id+'/wind', {method:'POST'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var up = await res.json();
-    if(window._detections && window._detections[id]) Object.assign(window._detections[id], up);
+    // Trigger wind fetch
+    await fetch(API+'/detections/'+id+'/wind', {method:'POST'});
+    // Re-fetch the full detection record so all fields are present
+    var dr = await fetch(API+'/detections/'+id);
+    var full = await dr.json();
+    window._detections = window._detections || {};
+    window._detections[id] = full;
+    // Re-render wind panel with complete data
     var c = el.querySelector('.wind-panel-container');
-    if(c) c.innerHTML = renderWindPanel(window._detections[id]||up);
-    if(up.drift_bearing_deg!=null && window._detections && window._detections[id]) addDriftArrow(window._detections[id]);
-  } catch(e){ console.warn(e); }
+    if(c) c.innerHTML = renderWindPanel(full);
+    // Redraw all drift arrows
+    driftLayerGroup.clearLayers();
+    Object.values(window._detections).forEach(function(d){
+      if(d.drift_vector) addDriftArrow(d);
+    });
+  } catch(e){ console.warn('Wind refresh error:', e); }
   if(btn){ btn.textContent='Wind'; btn.disabled=false; }
 }
 
@@ -1423,13 +1435,14 @@ async function revalidateOptical(id, el){
   var btn = el.querySelector('.action-btn[data-action="optical"]');
   if(btn){ btn.textContent='Validating...'; btn.disabled=true; }
   try {
-    var res = await fetch(API+'/detections/'+id+'/optical', {method:'POST'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var up = await res.json();
-    if(window._detections && window._detections[id]) Object.assign(window._detections[id], up);
+    await fetch(API+'/detections/'+id+'/optical', {method:'POST'});
+    var dr = await fetch(API+'/detections/'+id);
+    var full = await dr.json();
+    window._detections = window._detections || {};
+    window._detections[id] = full;
     var c = el.querySelector('.optical-panel-container');
-    if(c) c.innerHTML = renderOpticalPanel(window._detections[id]||up);
-  } catch(e){ console.warn(e); }
+    if(c) c.innerHTML = renderOpticalPanel(full);
+  } catch(e){ console.warn('Optical error:', e); }
   if(btn){ btn.textContent='S2'; btn.disabled=false; }
 }
 
@@ -1492,13 +1505,14 @@ async function reattributeAIS(id, el){
   var btn = el.querySelector('.action-btn[data-action="ais"]');
   if(btn){ btn.textContent='Querying...'; btn.disabled=true; }
   try {
-    var res = await fetch(API+'/detections/'+id+'/ais', {method:'POST'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var up = await res.json();
-    if(window._detections && window._detections[id]) Object.assign(window._detections[id], up);
+    await fetch(API+'/detections/'+id+'/ais', {method:'POST'});
+    var dr = await fetch(API+'/detections/'+id);
+    var full = await dr.json();
+    window._detections = window._detections || {};
+    window._detections[id] = full;
     var c = el.querySelector('.ais-panel-container');
-    if(c) c.innerHTML = renderAISPanel(window._detections[id]||up);
-  } catch(e){ console.warn(e); }
+    if(c) c.innerHTML = renderAISPanel(full);
+  } catch(e){ console.warn('AIS error:', e); }
   if(btn){ btn.textContent='AIS'; btn.disabled=false; }
 }
 
@@ -1852,11 +1866,19 @@ async function dispatchAlerts(){
   var btn=document.getElementById('dispatchBtn');
   btn.textContent='Dispatching...';
   btn.disabled=true;
-  await animatePackets();
+ await animatePackets();
   try {
-    await fetch(API+'/scan', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({scene_id:currentAlertDetection?currentAlertDetection.id:'latest'})});
-  } catch(e){}
+    var dispatchRes = await fetch(API+'/alerts/dispatch', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        detection_id: currentAlertDetection.id,
+        recipients: alertEmails
+      })
+    });
+    var dispatchData = await dispatchRes.json();
+    console.log('Dispatch result:', dispatchData);
+  } catch(e){ console.warn('Dispatch error:', e); }
   var svg=document.getElementById('flowSvg');
   alertEmails.forEach(function(_,i){
     var l=svg.querySelector('#line-'+i);

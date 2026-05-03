@@ -306,7 +306,7 @@ def _render_html(d: dict) -> str:
     thumb_fc           = d.get("optical_thumbnail_falsecolour")
 
     if d.get("ais_vessels_found") is not None:
-    phases_run.append(("Phase G AIS", "COMPLETE", "#a78bfa"))
+        phases_run.append(("Phase G AIS", "COMPLETE", "#a78bfa"))
 
     # Verdict colours
     c_verdict = {
