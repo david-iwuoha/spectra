@@ -59,6 +59,11 @@ Usage:
 """
 
 import asyncio
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass
 import json
 import logging
 import math
