@@ -371,15 +371,17 @@ class AISAttribution:
             return self._unavailable("AISSTREAM_API_KEY not configured")
 
         try:
-            raw_vessels = asyncio.run(
-                _fetch_from_aisstream(
+            import concurrent.futures
+            def _run():
+                return asyncio.run(_fetch_from_aisstream(
                     api_key=self._api_key,
                     lat=lat,
                     lon=lon,
                     radius_nm=radius_nm,
                     timeout_s=COLLECT_TIMEOUT_S,
-                )
-            )
+                ))
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                raw_vessels = pool.submit(_run).result()
         except Exception as exc:
             logger.error("AIS fetch failed: %s", exc, exc_info=True)
             return self._unavailable(f"AISStream error: {exc}")

@@ -98,65 +98,59 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
             db.add(det)
             db.commit()
             return
+        from backend.detect import run_detection
+        from backend.preprocess import find_bands
+        from pathlib import Path as _Path
+        import zipfile as _zf
 
-        all_probs = []
-        for img_path in images[:4]:
-            path_str = str(img_path)
-            if path_str.endswith(".npy"):
-                patch = np.load(img_path).astype(np.float32)
-            else:
-                img = Image.open(img_path).convert("L")
-                img = img.resize((256, 256))
-                arr = np.array(img, dtype=np.float32) / 255.0
-                patch = np.stack([arr, arr], axis=0)
+        scenes_dir = _Path("data/scenes")
+        for zf in scenes_dir.glob("*.zip"):
+            if not (scenes_dir / zf.stem).exists():
+                with _zf.ZipFile(zf, "r") as z:
+                    z.extractall(scenes_dir)
+        safe_dirs = list(scenes_dir.glob("*.SAFE"))
+        if not safe_dirs:
+            raise RuntimeError("No .SAFE scene found in data/scenes/")
+        scene = safe_dirs[0]
+        vv_path, vh_path = find_bands(str(scene))
+        if not vv_path:
+            raise RuntimeError("Could not find VV band in scene")
 
-            inp = torch.tensor(patch).unsqueeze(0).float()
-            with torch.no_grad():
-                pred = torch.sigmoid(MODEL(inp))
-            prob = pred.squeeze().numpy()
-            all_probs.append(prob)
-
-        combined = np.mean(all_probs, axis=0)
-        binary = (combined > 0.5).astype(int)
-        spill_pixels = int(binary.sum())
-        confidence = float(combined[binary == 1].mean()) if spill_pixels > 0 else 0.0
-        area_km2 = round((spill_pixels * 100) / 1e6, 4)
-
-        rows, cols = np.where(binary == 1)
-        if len(rows) > 0:
-            polygon = {
-                "type": "Polygon",
-                "coordinates": [[
-                    [4.411, 4.117],
-                    [6.959, 4.117],
-                    [6.959, 6.092],
-                    [4.411, 6.092],
-                    [4.411, 4.117]
-                ]]
-            }
-        else:
-            polygon = None
+        result = run_detection(vv_path, vh_path)
+        polygon = result.get("polygon")
 
         det = Detection(
             id=scan_id,
             watch_zone_id=watch_zone_id,
-            scene="S1A_IW_GRDH_Niger_Delta_20240117",
+            scene=scene.name,
             detected_at=datetime(2024, 1, 17, 17, 53, 33),
-            detected=spill_pixels > 100,
-            confidence=round(confidence * 100, 2),
-            area_km2=area_km2,
-            spill_pixels=spill_pixels,
+            detected=result.get("detected", False),
+            confidence=result["confidence"],
+            area_km2=result["area_km2"],
+            spill_pixels=result["spill_pixels"],
             polygon_geojson=json.dumps(polygon) if polygon else None,
             alert_sent=False,
-            lookalike_score=round(confidence, 4) if spill_pixels > 100 else None,
-            lookalike_label="oil" if spill_pixels > 100 else None,
-            lookalike_passed=True if spill_pixels > 100 else None,
+            lookalike_score=result.get("lookalike_score"),
+            lookalike_label=result.get("lookalike_label"),
+            lookalike_passed=result.get("lookalike_passed"),
+            wind_speed_ms=result.get("wind_speed_ms"),
+            wind_direction_deg=result.get("wind_direction_deg"),
+            wind_u=result.get("wind_u"),
+            wind_v=result.get("wind_v"),
+            sar_validity=result.get("sar_validity"),
+            sar_validity_detail=result.get("sar_validity_detail"),
+            lookalike_wind_risk=result.get("lookalike_wind_risk"),
+            lookalike_wind_note=result.get("lookalike_wind_note"),
+            drift_bearing_deg=result.get("drift_bearing_deg"),
+            drift_speed_ms=result.get("drift_speed_ms"),
+            drift_24h_km=result.get("drift_24h_km"),
+            wind_fetched_at=result.get("wind_fetched_at"),
+            wind_data_source=result.get("wind_data_source"),
             status="complete"
         )
         db.add(det)
         db.commit()
-
-        print(f"Scan {scan_id} saved — confidence: {det.confidence}% | area: {area_km2} km²")
+        print(f"Scan {scan_id} saved — confidence: {det.confidence}% | area: {result['area_km2']} km2")
 
     except Exception as e:
         print(f"Scan error: {e}")
