@@ -1594,12 +1594,16 @@ async function triggerScan(){
       body: JSON.stringify({scene_id:'latest'})
     });
     var data = await res.json();
-    var scanId = data.scan_id;
-    await sleep(1500);
+    await sleep(2000); // give backend time to finish scan
+
     var rr = await fetch(API + '/detections');
     var rd = await rr.json();
-    var det = rd.detections.find(function(x){ return x.id===scanId; });
-    if(det){ addDetectionToMap(det); addDetectionCard(det); updateStats(det); }
+    rd.detections.forEach(function(det){
+        addDetectionToMap(det);
+        addDetectionCard(det);
+        updateStats(det);
+    });
+
   } catch(e){
     /* Backend unreachable — show error state, do NOT render fake data */
     console.warn('Backend unreachable:', e);
@@ -1740,11 +1744,9 @@ async function loadDetections(){
     var res = await fetch(API + '/detections');
     var data = await res.json();
     data.detections.forEach(function(d){
-      if(d.detected){
         addDetectionToMap(d);
         addDetectionCard(d);
         updateStats(d);
-      }
     });
     /* Build heatmap from loaded detections if layer is on */
     if(layers.heatmap && window._detections && Object.keys(window._detections).length > 0) buildHeatmap();
