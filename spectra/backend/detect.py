@@ -208,24 +208,21 @@ def run_detection(vv_path: str, vh_path: str = None):
     # ────────────────────────────────────────────────────────────────────────
     # ── Phase E: Optical cross-validation ───────────────────────────────
     if geojson_polygon is not None and polygons:
-      try:
-        largest_polygon = max(polygons, key=lambda p: p.area)
-        centroid = largest_polygon.centroid
-        centroid_lat = float(centroid.y)
-        centroid_lon = float(centroid.x)
-    except Exception:
-        centroid_lat = 0.0
-        centroid_lon = 0.0
-    else:
-         centroid_lat = 0.0
-         centroid_lon = 0.0
+        try:
+            largest_polygon = max(polygons, key=lambda p: p.area)
+            centroid = largest_polygon.centroid
+            centroid_lat = float(centroid.y)
+            centroid_lon = float(centroid.x)
+        except Exception:
+            centroid_lat = 0.0
+            centroid_lon = 0.0
 
         optical = _optical_validator.validate(
             lat=centroid_lat,
             lon=centroid_lon,
             detection_polygon=geojson_polygon,
-            scene_timestamp=_extract_scene_timestamp(vv_path),     # use real Sentinel-1 timestamp later
-            local_scene_path=None     # auto-search data/scenes/
+            scene_timestamp=_extract_scene_timestamp(vv_path),
+            local_scene_path=None
         )
     else:
         optical = {
