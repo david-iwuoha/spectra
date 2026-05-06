@@ -203,7 +203,9 @@ class LookalikeClassifier:
         tensor = transforms.ToTensor()(img).unsqueeze(0).to(self.device)
         with torch.no_grad():
             score = torch.sigmoid(self.model(tensor)).item()
-        return {"lookalike_score": round(score, 4), "lookalike_passed": score >= self.threshold}
+        passed = score >= self.threshold
+        label = "oil" if passed else "lookalike"
+        return {"lookalike_score": round(score, 4), "lookalike_passed": passed, "lookalike_label": label}
 
 def prep_kaggle_dataset(kaggle_dir: Path, output_dir: Path):
     """Smart-match prep utility that ignores extensions and matches by stem."""

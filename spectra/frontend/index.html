@@ -1594,16 +1594,28 @@ async function triggerScan(){
       body: JSON.stringify({scene_id:'latest'})
     });
     var data = await res.json();
-    await sleep(2000); // give backend time to finish scan
+    var scanId = data.scan_id;
 
-    var rr = await fetch(API + '/detections');
-    var rd = await rr.json();
-    rd.detections.forEach(function(det){
-        addDetectionToMap(det);
-        addDetectionCard(det);
-        updateStats(det);
-    });
-
+    // Poll every 10 seconds until the detection appears, up to 5 minutes
+    var found = false;
+    for(var attempt=0; attempt<30; attempt++){
+      await sleep(10000);
+      var rr = await fetch(API + '/detections/' + scanId);
+      var det = await rr.json();
+      if(det && det.id && det.detected !== undefined){
+         // Only add if not already on map
+         if(!window._detections || !window._detections[scanId]){
+          addDetectionToMap(det);
+          addDetectionCard(det);
+          updateStats(det);
+         }
+         found = true;
+         break;
+      }
+    }
+    if(!found){
+      alert('Scan is taking longer than expected. Reload the page to check results.');
+    }
   } catch(e){
     /* Backend unreachable — show error state, do NOT render fake data */
     console.warn('Backend unreachable:', e);

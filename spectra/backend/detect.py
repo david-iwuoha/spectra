@@ -191,10 +191,25 @@ def run_detection(vv_path: str, vh_path: str = None):
     # ────────────────────────────────────────────────────────────────────────
 
     # ── Phase D: Wind context (ADDED HERE SAFELY) ───────────────────────────
+    try:
+        _raw = geojson_polygon["coordinates"][0] if geojson_polygon else None
+        if _raw:
+            def _flat(c):
+                if isinstance(c, (int, float)): return [c]
+                if isinstance(c, (list, tuple)) and len(c)==2 and isinstance(c[0], (int,float)): return list(c)
+                return []
+            _pts = [_flat(c) for c in _raw if _flat(c)]
+            _wlon = float(sum(p[0] for p in _pts) / len(_pts))
+            _wlat = float(sum(p[1] for p in _pts) / len(_pts))
+        else:
+            _wlat, _wlon = 5.0, 6.5
+    except Exception:
+        _wlat, _wlon = 5.0, 6.5
+    _wts = "2024-01-17T17:53:33Z"
     wind = _wind_context.get_context(
-        lat=0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][1],
-        lon=0.0 if geojson_polygon is None else geojson_polygon["coordinates"][0][0][0],
-        timestamp=None  # replace later with Sentinel metadata if available
+        lat=_wlat,
+        lon=_wlon,
+        timestamp=_wts
     )
 
     drift_geojson = None
