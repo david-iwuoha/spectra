@@ -1596,25 +1596,14 @@ async function triggerScan(){
     var data = await res.json();
     var scanId = data.scan_id;
 
-    // Poll every 10 seconds until the detection appears, up to 5 minutes
-    var found = false;
-    for(var attempt=0; attempt<30; attempt++){
-      await sleep(10000);
-      var rr = await fetch(API + '/detections/' + scanId);
-      var det = await rr.json();
-      if(det && det.id && det.detected !== undefined){
-         // Only add if not already on map
-         if(!window._detections || !window._detections[scanId]){
-          addDetectionToMap(det);
-          addDetectionCard(det);
-          updateStats(det);
-         }
-         found = true;
-         break;
-      }
-    }
-    if(!found){
-      alert('Scan is taking longer than expected. Reload the page to check results.');
+    // Wait for scan then fetch once
+    await sleep(15000);
+    var rr = await fetch(API + '/detections/' + scanId);
+    var det = await rr.json();
+    if(det && det.id && !(window._detections && window._detections[scanId])){
+      addDetectionToMap(det);
+      addDetectionCard(det);
+      updateStats(det);
     }
   } catch(e){
     /* Backend unreachable — show error state, do NOT render fake data */
