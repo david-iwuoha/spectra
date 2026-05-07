@@ -184,11 +184,8 @@ spectra/
 - [x] Phase C — Look-alike Classifier (MobileNet CNN, trained and integrated)
 - [x] Phase D — Wind Context Layer (ERA5 API, drift vector, SAR validity gate)
 - [x] Phase E — Sentinel-2 Optical Cross-Validation (OSI, SWIRI, NDWI, RGB thumbnails)
-
-### In Progress / Planned
-
-- [ ] Phase F — Report Generation (professional PDF output for regulatory submission)
-- [ ] Phase G — AIS Vessel Attribution (cross-reference ship tracking data to identify source vessels)
+- [x] Phase F — Report Generation (professional PDF output for regulatory submission)
+- [x] Phase G — AIS Vessel Attribution (cross-reference ship tracking data to identify source vessels)
 - [ ] Phase H — Retrain with UNet++ on expanded dataset for higher IoU
 
 ---
