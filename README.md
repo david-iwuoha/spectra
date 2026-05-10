@@ -208,7 +208,7 @@ Spectra is built for industrial deployment by:
 
 > *Spectra is under active development. The detection pipeline (Phases A–E) is production-ready. Phases F–H are in the roadmap.*
 
----
+-----------
 
 <div align="center">
 
