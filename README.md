@@ -59,7 +59,7 @@ The detection pipeline runs in sequence, with each stage adding a layer of confi
 | **Copernicus CDSE** | Sentinel-1 SAR scene search and download |
 | **ERA5 / CDS API** | Hourly 10m wind data (u10, v10) for wind context layer |
 | **Sentinel-2 L2A** | Optical cross-validation: OSI, SWIRI, NDWI spectral indices + RGB thumbnails |
-| **Rasterio + NumPy + Pillow** | Band extraction, spectral index computation, thumbnail generation |
+| **Rasterio + NumPy + Pillow** | Band extraction, spectral index computation, thumbnail generation | 
 | **Resend** | Transactional email alert dispatch |
 | **Leaflet.js + Leaflet.draw** | Interactive geospatial map, Watch Zone polygon drawing, drift arrow rendering |
 | **HTML / CSS / Vanilla JS** | Frontend dashboard — no framework dependencies |
