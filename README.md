@@ -10,7 +10,7 @@
 ```
 
 ### AI-Powered Oil Spill Detection Platform — Niger Delta Surveillance  
-
+      
 ![Status](https://img.shields.io/badge/Status-Active%20Development-00d4aa?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-U--Net-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
