@@ -7,6 +7,8 @@ export async function fetchDetections() {
 
 export async function fetchDetection(id) {
   const res = await fetch(API + '/detections/' + id);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch detection ' + id + ': HTTP ' + res.status);
   return res.json();
 }
 

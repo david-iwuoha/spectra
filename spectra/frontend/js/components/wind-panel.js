@@ -50,6 +50,7 @@ export async function refreshWindForDetection(id, el) {
   try {
     await requestWind(id);
     const full = await fetchDetection(id);
+    if (!full) throw new Error('Detection ' + id + ' no longer exists');
     detections[id] = full;
     const container = el.querySelector('.wind-panel-container');
     if (container) container.innerHTML = renderWindPanel(full);

@@ -77,11 +77,118 @@ class AlertDispatch(BaseModel):
     recipients: List[str]
 
 
+# ─── SERIALIZATION ─────────────────────────────────────────
+
+def polygon_centroid(polygon: Optional[dict]):
+    """Mean vertex of a GeoJSON polygon ring, or (None, None)."""
+    if not polygon or not polygon.get("coordinates"):
+        return None, None
+    ring = polygon["coordinates"][0]
+    if not ring:
+        return None, None
+    lat = sum(p[1] for p in ring) / len(ring)
+    lon = sum(p[0] for p in ring) / len(ring)
+    return lat, lon
+
+
+def serialize_detection(d: Detection, include_thumbnails: bool = True) -> dict:
+    """
+    Single source of truth for the detection JSON shape, so the list and
+    detail endpoints can't drift apart. Thumbnails are base64 blobs, so
+    the list endpoint omits them to keep the payload small.
+    """
+    drift_vector = None
+    if d.drift_bearing_deg is not None:
+        drift_vector = {
+            "bearing_deg": d.drift_bearing_deg,
+            "speed_ms": d.drift_speed_ms,
+            "6h_km": round(d.drift_24h_km / 4, 2) if d.drift_24h_km else None,
+            "12h_km": round(d.drift_24h_km / 2, 2) if d.drift_24h_km else None,
+            "24h_km": d.drift_24h_km,
+        }
+
+    ais_top_suspect = None
+    if d.ais_top_suspect:
+        try:
+            ais_top_suspect = json.loads(d.ais_top_suspect)
+        except Exception:
+            pass
+
+    polygon = json.loads(d.polygon_geojson) if d.polygon_geojson else None
+    centroid_lat, centroid_lon = polygon_centroid(polygon)
+
+    payload = {
+        "id": d.id,
+        "watch_zone_id": d.watch_zone_id,
+        "scene": d.scene,
+        "detected_at": d.detected_at.isoformat() if d.detected_at else None,
+        "detected": d.detected,
+        "confidence": d.confidence,
+        "area_km2": d.area_km2,
+        "spill_pixels": d.spill_pixels,
+        "polygon": polygon,
+        "centroid_lat": centroid_lat,
+        "centroid_lon": centroid_lon,
+        "alert_sent": d.alert_sent,
+        "status": d.status,
+        "lookalike_score": d.lookalike_score,
+        "lookalike_label": d.lookalike_label,
+        "lookalike_passed": d.lookalike_passed,
+        "wind_speed_ms": d.wind_speed_ms,
+        "wind_direction_deg": d.wind_direction_deg,
+        "wind_u": d.wind_u,
+        "wind_v": d.wind_v,
+        "sar_validity": d.sar_validity,
+        "sar_validity_detail": d.sar_validity_detail,
+        "lookalike_wind_risk": d.lookalike_wind_risk,
+        "lookalike_wind_note": d.lookalike_wind_note,
+        "drift_bearing_deg": d.drift_bearing_deg,
+        "drift_speed_ms": d.drift_speed_ms,
+        "drift_24h_km": d.drift_24h_km,
+        "drift_vector": drift_vector,
+        "wind_fetched_at": d.wind_fetched_at,
+        "wind_data_source": d.wind_data_source,
+        "optical_verdict": d.optical_verdict,
+        "optical_confidence": d.optical_confidence,
+        "optical_cloud_fraction": d.optical_cloud_fraction,
+        "optical_osi": d.optical_osi,
+        "optical_swiri": d.optical_swiri,
+        "optical_ndwi": d.optical_ndwi,
+        "optical_reason": d.optical_reason,
+        "optical_scene_name": d.optical_scene_name,
+        "optical_validated_at": d.optical_validated_at,
+        "ais_vessels_found": d.ais_vessels_found,
+        "ais_top_suspect": ais_top_suspect,
+        "ais_search_radius_nm": d.ais_search_radius_nm,
+        "ais_queried_at": d.ais_queried_at,
+        "ais_data_source": d.ais_data_source,
+        "ais_note": d.ais_note,
+    }
+
+    if include_thumbnails:
+        payload["optical_thumbnail_rgb"] = d.optical_thumbnail_rgb
+        payload["optical_thumbnail_falsecolour"] = d.optical_thumbnail_falsecolour
+
+    return payload
+
+
 # ─── DETECTION ENGINE ──────────────────────────────────────
 
 def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
     from backend.database import SessionLocal
     db = SessionLocal()
+
+    # Create the row up front with status="running" so the client can poll
+    # this id for progress instead of guessing how long the scan will take.
+    det = Detection(
+        id=scan_id,
+        watch_zone_id=watch_zone_id,
+        status="running",
+        detected=False,
+        detected_at=datetime.utcnow(),
+    )
+    db.add(det)
+    db.commit()
 
     try:
         images = list(TEST_DIR.glob("*.jpg")) if TEST_DIR.exists() else []
@@ -89,13 +196,7 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
             images = list(PATCHES_DIR.rglob("*.npy"))
 
         if not images:
-            det = Detection(
-                id=scan_id,
-                status="failed",
-                detected=False,
-                detected_at=datetime(2024, 1, 17, 17, 53, 33)
-            )
-            db.add(det)
+            det.status = "failed"
             db.commit()
             return
         from backend.preprocess import find_bands
@@ -173,28 +274,28 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
         lookalike_label = "oil" if spill_pixels > 100 else None
         lookalike_passed = True if spill_pixels > 100 else None
 
-        det = Detection(
-            id=scan_id,
-            watch_zone_id=watch_zone_id,
-            scene=scene.name,
-            detected_at=datetime(2024, 1, 17, 17, 53, 33),
-            detected=spill_pixels > 100,
-            confidence=round(confidence * 100, 2),
-            area_km2=area_km2,
-            spill_pixels=spill_pixels,
-            polygon_geojson=json.dumps(polygon) if polygon else None,
-            alert_sent=False,
-            lookalike_score=lookalike_score,
-            lookalike_label=lookalike_label,
-            lookalike_passed=lookalike_passed,
-            status="complete"
-        )
-        db.add(det)
+        det.scene = scene.name
+        det.detected_at = datetime(2024, 1, 17, 17, 53, 33)
+        det.detected = spill_pixels > 100
+        det.confidence = round(confidence * 100, 2)
+        det.area_km2 = area_km2
+        det.spill_pixels = spill_pixels
+        det.polygon_geojson = json.dumps(polygon) if polygon else None
+        det.alert_sent = False
+        det.lookalike_score = lookalike_score
+        det.lookalike_label = lookalike_label
+        det.lookalike_passed = lookalike_passed
+        det.status = "complete"
         db.commit()
         print(f"Scan {scan_id} saved — confidence: {det.confidence}% | area: {area_km2} km2")
     except Exception as e:
         print(f"Scan error: {e}")
         db.rollback()
+        # Surface the failure to the client instead of leaving it polling forever.
+        failed = db.query(Detection).filter(Detection.id == scan_id).first()
+        if failed:
+            failed.status = "failed"
+            db.commit()
     finally:
         db.close()
     
@@ -284,22 +385,7 @@ def delete_watch_zone(zone_id: str, db: Session = Depends(get_db)):
 def get_detections(db: Session = Depends(get_db)):
     dets = db.query(Detection).order_by(Detection.detected_at.desc()).all()
     return {
-        "detections": [
-            {
-                "id": d.id,
-                "watch_zone_id": d.watch_zone_id,
-                "scene": d.scene,
-                "detected_at": d.detected_at.isoformat(),
-                "detected": d.detected,
-                "confidence": d.confidence,
-                "area_km2": d.area_km2,
-                "spill_pixels": d.spill_pixels,
-                "polygon": json.loads(d.polygon_geojson) if d.polygon_geojson else None,
-                "alert_sent": d.alert_sent,
-                "status": d.status
-            }
-            for d in dets
-        ],
+        "detections": [serialize_detection(d, include_thumbnails=False) for d in dets],
         "total": len(dets)
     }
 
@@ -307,69 +393,8 @@ def get_detections(db: Session = Depends(get_db)):
 def get_detection(detection_id: str, db: Session = Depends(get_db)):
     d = db.query(Detection).filter(Detection.id == detection_id).first()
     if not d:
-        return {"error": "Detection not found"}
-    drift_vector = None
-    if d.drift_bearing_deg is not None:
-        drift_vector = {
-            "bearing_deg": d.drift_bearing_deg,
-            "speed_ms": d.drift_speed_ms,
-            "6h_km": round(d.drift_24h_km / 4, 2) if d.drift_24h_km else None,
-            "12h_km": round(d.drift_24h_km / 2, 2) if d.drift_24h_km else None,
-            "24h_km": d.drift_24h_km,
-        }
-    ais_top_suspect = None
-    if d.ais_top_suspect:
-        try:
-            ais_top_suspect = json.loads(d.ais_top_suspect)
-        except Exception:
-            pass
-    return {
-        "id": d.id,
-        "watch_zone_id": d.watch_zone_id,
-        "scene": d.scene,
-        "detected_at": d.detected_at.isoformat() if d.detected_at else None,
-        "detected": d.detected,
-        "confidence": d.confidence,
-        "area_km2": d.area_km2,
-        "spill_pixels": d.spill_pixels,
-        "polygon": json.loads(d.polygon_geojson) if d.polygon_geojson else None,
-        "alert_sent": d.alert_sent,
-        "status": d.status,
-        "lookalike_score": d.lookalike_score,
-        "lookalike_label": d.lookalike_label,
-        "lookalike_passed": d.lookalike_passed,
-        "wind_speed_ms": d.wind_speed_ms,
-        "wind_direction_deg": d.wind_direction_deg,
-        "wind_u": d.wind_u,
-        "wind_v": d.wind_v,
-        "sar_validity": d.sar_validity,
-        "sar_validity_detail": d.sar_validity_detail,
-        "lookalike_wind_risk": d.lookalike_wind_risk,
-        "lookalike_wind_note": d.lookalike_wind_note,
-        "drift_bearing_deg": d.drift_bearing_deg,
-        "drift_speed_ms": d.drift_speed_ms,
-        "drift_24h_km": d.drift_24h_km,
-        "drift_vector": drift_vector,
-        "wind_fetched_at": d.wind_fetched_at,
-        "wind_data_source": d.wind_data_source,
-        "optical_verdict": d.optical_verdict,
-        "optical_confidence": d.optical_confidence,
-        "optical_cloud_fraction": d.optical_cloud_fraction,
-        "optical_osi": d.optical_osi,
-        "optical_swiri": d.optical_swiri,
-        "optical_ndwi": d.optical_ndwi,
-        "optical_reason": d.optical_reason,
-        "optical_scene_name": d.optical_scene_name,
-        "optical_thumbnail_rgb": d.optical_thumbnail_rgb,
-        "optical_thumbnail_falsecolour": d.optical_thumbnail_falsecolour,
-        "optical_validated_at": d.optical_validated_at,
-        "ais_vessels_found": d.ais_vessels_found,
-        "ais_top_suspect": ais_top_suspect,
-        "ais_search_radius_nm": d.ais_search_radius_nm,
-        "ais_queried_at": d.ais_queried_at,
-        "ais_data_source": d.ais_data_source,
-        "ais_note": d.ais_note,
-    }
+        raise HTTPException(status_code=404, detail="Detection not found")
+    return serialize_detection(d)
 
 @app.get("/detections/{detection_id}/report")
 async def download_report(detection_id: str, db: Session = Depends(get_db)):

@@ -78,6 +78,7 @@ export async function revalidateOptical(id, el) {
   try {
     await requestOptical(id);
     const full = await fetchDetection(id);
+    if (!full) throw new Error('Detection ' + id + ' no longer exists');
     detections[id] = full;
     const container = el.querySelector('.optical-panel-container');
     if (container) container.innerHTML = renderOpticalPanel(full);

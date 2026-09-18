@@ -51,6 +51,7 @@ export async function reattributeAIS(id, el) {
   try {
     await requestAIS(id);
     const full = await fetchDetection(id);
+    if (!full) throw new Error('Detection ' + id + ' no longer exists');
     detections[id] = full;
     const container = el.querySelector('.ais-panel-container');
     if (container) container.innerHTML = renderAISPanel(full);

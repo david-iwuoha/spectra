@@ -45,6 +45,25 @@ function setTopbarStatus(state) {
   }
 }
 
+const SCAN_POLL_INTERVAL_MS = 2000;
+const SCAN_TIMEOUT_MS = 180000;
+
+/**
+ * Polls the scan's detection row until it leaves "running".
+ * Returns the detection, or null if it never settled within the timeout.
+ * The row is created immediately by the backend with status="running",
+ * but poll through 404s anyway in case the request beats the insert.
+ */
+async function pollForScanResult(scanId) {
+  const deadline = Date.now() + SCAN_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const det = await fetchDetection(scanId);
+    if (det && det.status && det.status !== 'running') return det;
+    await sleep(SCAN_POLL_INTERVAL_MS);
+  }
+  return null;
+}
+
 // NOTE: stage timing below is still a fixed setTimeout choreography, not a
 // reflection of real backend progress — see the project plan's credibility
 // findings (fake pipeline-stage animation). This is carried over unchanged
@@ -79,12 +98,15 @@ export async function triggerScan() {
     const data = await triggerScanRequest();
     const scanId = data.scan_id;
 
-    await sleep(15000);
-    const det = await fetchDetection(scanId);
-    if (det && det.id && !detections[scanId]) {
+    const det = await pollForScanResult(scanId);
+    if (det && det.status === 'failed') {
+      alert('Scan failed on the server. Check the backend logs for details.');
+    } else if (det && !detections[scanId]) {
       addDetectionToMap(det);
       addDetectionCard(det);
       updateStats(det);
+    } else if (!det) {
+      alert('Scan did not finish within ' + (SCAN_TIMEOUT_MS / 1000) + 's. It may still be running — reload to check.');
     }
   } catch (e) {
     console.warn('Backend unreachable:', e);
