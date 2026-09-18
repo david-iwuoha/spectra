@@ -9,6 +9,8 @@ from pathlib import Path
 import segmentation_models_pytorch as smp
 import json
 import logging
+import re
+from typing import Optional
 
 # ── Phase C: Look-alike Classifier ──────────────────────────────────────────
 from backend.lookalike_classifier import LookalikeClassifier
@@ -23,6 +25,19 @@ logger = logging.getLogger(__name__)
 MODELS_DIR = Path("models")
 PATCH_SIZE = 256
 DEVICE = "cpu"
+
+# How much of the scene to actually run the model over.
+#
+# Patches are PATCH_SIZE x PATCH_SIZE and are read in 1024x1024 chunks, so
+# 16 patches == one chunk == the top-left ~1024x1024 px of the scene. On a
+# typical Sentinel-1 IW GRD scene (~25000 x 16000 px) that is well under 1%
+# of the image, and the corner is not necessarily even over water.
+#
+# Set to None to scan the whole scene. That is the correct setting for real
+# operational use, but costs roughly (width/256) * (height/256) model
+# invocations — thousands of patches, minutes of CPU — so time it on your
+# deployment before turning it on.
+MAX_PATCHES = 16
 
 _lookalike_classifier = LookalikeClassifier(
     model_path=MODELS_DIR / "lookalike_model.pth"
@@ -74,20 +89,27 @@ from datetime import datetime
 
 def _extract_scene_timestamp(scene_path):
     """
-    Extract ISO timestamp from Sentinel scene filename.
-    Example:
-    S1A_IW_GRDH_1SDV_20241114T093000_...
+    Extract ISO timestamp from a Sentinel scene path.
+
+    Handles both casings, because the .SAFE directory uppercases the
+    separator while the measurement TIFFs inside it lowercase it:
+        S1A_IW_GRDH_1SDV_20240117T175333_...        (.SAFE dir)
+        s1a-iw-grd-vv-20240117t175333-...tiff       (measurement file)
+
+    Returns None when no timestamp can be parsed, so callers can decide
+    what to do rather than silently inheriting a wrong date.
     """
     name = Path(scene_path).name
 
-    match = re.search(r"(20\d{6}T\d{6})", name)
+    match = re.search(r"(20\d{6}[Tt]\d{6})", name)
     if match:
-        dt = datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
+        dt = datetime.strptime(match.group(1).upper(), "%Y%m%dT%H%M%S")
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    return "2024-01-17T17:53:33Z"
+    logger.warning("Could not parse acquisition timestamp from %s", name)
+    return None
 
-def run_detection(vv_path: str, vh_path: str = None):
+def run_detection(vv_path: str, vh_path: str = None, max_patches: Optional[int] = MAX_PATCHES):
 
     model = load_model()
     print(f"Model loaded. Running detection on {Path(vv_path).name}...")
@@ -141,10 +163,16 @@ def run_detection(vv_path: str, vh_path: str = None):
 
                 print(f"  Chunk ({row_off},{col_off}) done — {patch_count} patches")
 
-                if patch_count >= 16:
+                if max_patches is not None and patch_count >= max_patches:
                     break
-            if patch_count >= 16:
+            if max_patches is not None and patch_count >= max_patches:
                 break
+
+        scanned_px = patch_count * PATCH_SIZE * PATCH_SIZE
+        logger.info(
+            "Scanned %d patches (~%.1f%% of the %dx%d scene)",
+            patch_count, 100.0 * scanned_px / (height * width), width, height,
+        )
 
         if vh_src:
             vh_src.close()

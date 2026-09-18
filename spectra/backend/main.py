@@ -174,6 +174,35 @@ def serialize_detection(d: Detection, include_thumbnails: bool = True) -> dict:
 
 # ─── DETECTION ENGINE ──────────────────────────────────────
 
+# Column names on the Detection model, used to filter run_detection()'s
+# result dict — it carries a few keys (ais_match_found, ais_reason) that
+# aren't persisted, and silently setattr-ing those would be a no-op at best.
+DETECTION_COLUMNS = {c.name for c in Detection.__table__.columns}
+
+# Set by run_detection() / handled explicitly, so the generic mapper skips them.
+_MANUALLY_MAPPED = {"polygon", "detected_at", "polygon_geojson", "alert_sent", "status", "id"}
+
+
+def _parse_scene_timestamp(value: Optional[str]) -> Optional[datetime]:
+    """ISO-8601 'Z' string from the scene filename -> naive UTC datetime."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def apply_result_to_detection(det: Detection, result: dict) -> None:
+    """Copy run_detection() output onto the ORM row, JSON-encoding containers."""
+    for key, value in result.items():
+        if key in _MANUALLY_MAPPED or key not in DETECTION_COLUMNS:
+            continue
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value)
+        setattr(det, key, value)
+
+
 def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
     from backend.database import SessionLocal
     db = SessionLocal()
@@ -191,103 +220,38 @@ def run_scan_job(scan_id: str, watch_zone_id: Optional[str] = None):
     db.commit()
 
     try:
-        images = list(TEST_DIR.glob("*.jpg")) if TEST_DIR.exists() else []
-        if not images:
-            images = list(PATCHES_DIR.rglob("*.npy"))
-
-        if not images:
-            det.status = "failed"
-            db.commit()
-            return
+        import zipfile
         from backend.preprocess import find_bands
-        from pathlib import Path as _Path
-        import zipfile as _zf
+        from backend.detect import run_detection, _extract_scene_timestamp
 
-        scenes_dir = _Path("data/scenes")
+        scenes_dir = Path("data/scenes")
         for zf in scenes_dir.glob("*.zip"):
             if not (scenes_dir / zf.stem).exists():
-                with _zf.ZipFile(zf, "r") as z:
+                with zipfile.ZipFile(zf, "r") as z:
                     z.extractall(scenes_dir)
-        safe_dirs = list(scenes_dir.glob("*.SAFE"))
+
+        safe_dirs = sorted(scenes_dir.glob("*.SAFE"))
         if not safe_dirs:
             raise RuntimeError("No .SAFE scene found in data/scenes/")
+
         scene = safe_dirs[0]
         vv_path, vh_path = find_bands(str(scene))
         if not vv_path:
-            raise RuntimeError("Could not find VV band in scene")
+            raise RuntimeError(f"Could not find VV band in {scene.name}")
 
-        all_probs = []
-        import numpy as np
-        import torch
-        import rasterio
-        with rasterio.open(vv_path) as src:
-            from rasterio.transform import from_gcps
-            gcps, crs = src.gcps
-            transform = from_gcps(gcps)
-            arr = src.read(1).astype(np.float32)
+        # run_detection() is the real pipeline: it georeferences the mask into
+        # actual polygons, runs the look-alike classifier, and pulls wind /
+        # optical / AIS context. Keep this as the single detection path so the
+        # scan endpoint can't drift away from it.
+        result = run_detection(vv_path, vh_path)
 
-        if arr.max() > 0:
-            arr = arr / arr.max()
-
-        patch_size = 256
-        for row in range(0, min(arr.shape[0], patch_size*4), patch_size):
-            for col in range(0, min(arr.shape[1], patch_size*4), patch_size):
-                tile = arr[row:row+patch_size, col:col+patch_size]
-                if tile.shape[0] < patch_size or tile.shape[1] < patch_size:
-                    continue
-                patch = np.stack([tile, tile], axis=0)
-                inp = torch.tensor(patch).unsqueeze(0).float()
-                with torch.no_grad():
-                    pred = torch.sigmoid(MODEL(inp))
-                prob = pred.squeeze().numpy()
-                all_probs.append(prob)
-                if len(all_probs) >= 4:
-                    break
-            if len(all_probs) >= 4:
-                break
-
-        if not all_probs:
-            raise RuntimeError("No patches extracted from scene")
-
-        combined = np.mean(all_probs, axis=0)
-        binary = (combined > 0.5).astype(int)
-        spill_pixels = int(binary.sum())
-        confidence = float(combined[binary == 1].mean()) if spill_pixels > 0 else 0.0
-        area_km2 = round((spill_pixels * 100) / 1e6, 4)
-
-        rows_idx, cols_idx = np.where(binary == 1)
-        if len(rows_idx) > 0:
-            polygon = {
-                "type": "Polygon",
-                "coordinates": [[
-                    [4.411, 4.117],
-                    [6.959, 4.117],
-                    [6.959, 6.092],
-                    [4.411, 6.092],
-                    [4.411, 4.117]
-                ]]
-            }
-        else:
-            polygon = None
-
-        lookalike_score = round(confidence, 4) if spill_pixels > 100 else None
-        lookalike_label = "oil" if spill_pixels > 100 else None
-        lookalike_passed = True if spill_pixels > 100 else None
-
-        det.scene = scene.name
-        det.detected_at = datetime(2024, 1, 17, 17, 53, 33)
-        det.detected = spill_pixels > 100
-        det.confidence = round(confidence * 100, 2)
-        det.area_km2 = area_km2
-        det.spill_pixels = spill_pixels
-        det.polygon_geojson = json.dumps(polygon) if polygon else None
+        det.detected_at = _parse_scene_timestamp(_extract_scene_timestamp(vv_path))
+        det.polygon_geojson = json.dumps(result["polygon"]) if result.get("polygon") else None
         det.alert_sent = False
-        det.lookalike_score = lookalike_score
-        det.lookalike_label = lookalike_label
-        det.lookalike_passed = lookalike_passed
+        apply_result_to_detection(det, result)
         det.status = "complete"
         db.commit()
-        print(f"Scan {scan_id} saved — confidence: {det.confidence}% | area: {area_km2} km2")
+        print(f"Scan {scan_id} saved — confidence: {det.confidence}% | area: {det.area_km2} km2")
     except Exception as e:
         print(f"Scan error: {e}")
         db.rollback()
