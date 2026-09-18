@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectra — Oil Spill Detection</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&family=DM+Mono:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/panels.css">
+<link rel="stylesheet" href="css/detection-card.css">
+<link rel="stylesheet" href="css/wind-panel.css">
+<link rel="stylesheet" href="css/optical-panel.css">
+<link rel="stylesheet" href="css/ais-panel.css">
+<link rel="stylesheet" href="css/modal.css">
+<link rel="stylesheet" href="css/leaflet-overrides.css">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-block">
+    <div class="logo">Spectra</div>
+    <div class="logo-sub">Niger Delta Surveillance</div>
+  </div>
+  <div class="topbar-center">
+    <div class="status-pill">
+      <div class="status-dot" id="s1StatusDot"></div>
+      <span id="s1StatusText">Sentinel-1 Active</span>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot" id="pipeStatusDot" style="animation:none;"></div>
+      <span id="pipeStatusText">Pipeline Idle</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock"></div>
+    <button class="scan-btn" id="scanBtn" onclick="triggerScan()">&#9654; Run Scan</button>
+  </div>
+</div>
+
+<!-- PIPELINE PROGRESS -->
+<div class="pipeline-bar" id="pipelineBar">
+  <div class="pipeline-stage" id="ps-sar"><div class="stage-dot"></div><span class="pipeline-stage-label">SAR Ingest</span></div>
+  <div class="stage-sep">›</div>
+  <div class="pipeline-stage" id="ps-classify"><div class="stage-dot"></div><span class="pipeline-stage-label">Classifier</span></div>
+  <div class="stage-sep">›</div>
+  <div class="pipeline-stage" id="ps-wind"><div class="stage-dot"></div><span class="pipeline-stage-label">Wind ERA5</span></div>
+  <div class="stage-sep">›</div>
+  <div class="pipeline-stage" id="ps-optical"><div class="stage-dot"></div><span class="pipeline-stage-label">Sentinel-2</span></div>
+  <div class="stage-sep">›</div>
+  <div class="pipeline-stage" id="ps-ais"><div class="stage-dot"></div><span class="pipeline-stage-label">AIS</span></div>
+  <div class="stage-sep">›</div>
+  <div class="pipeline-stage" id="ps-done"><div class="stage-dot"></div><span class="pipeline-stage-label">Complete</span></div>
+  <div class="pipeline-progress-track" style="margin-left:auto;">
+    <div class="pipeline-progress-fill" id="pipelineFill"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-label">Map Layers</div>
+      <div class="layer-row" onclick="toggleLayer('spills')">
+        <div class="layer-left">
+          <div class="layer-pip" style="background:var(--alert-2);"></div>
+          <div><div class="layer-name">Spill Detections</div><div class="layer-hint">AI-detected polygons</div></div>
+        </div>
+        <div class="toggle on" id="toggle-spills"></div>
+      </div>
+      <div class="layer-row" onclick="toggleLayer('heatmap')">
+        <div class="layer-left">
+          <div class="layer-pip" style="background:var(--warn-2);"></div>
+          <div><div class="layer-name">Detection Heatmap</div><div class="layer-hint">Spill concentration density</div></div>
+        </div>
+        <div class="toggle" id="toggle-heatmap"></div>
+      </div>
+      <div class="layer-row" onclick="toggleLayer('pipelines')">
+        <div class="layer-left">
+          <div class="layer-pip" style="background:var(--mid-2);"></div>
+          <div><div class="layer-name">Pipeline Corridors</div><div class="layer-hint">Known routes (approximate)</div></div>
+        </div>
+        <div class="toggle on" id="toggle-pipelines"></div>
+      </div>
+      <div class="layer-row" onclick="toggleLayer('historical')">
+        <div class="layer-left">
+          <div class="layer-pip" style="background:var(--vessel-2);"></div>
+          <div><div class="layer-name">Documented Incidents</div><div class="layer-hint">Historical spill record</div></div>
+        </div>
+        <div class="toggle on" id="toggle-historical"></div>
+      </div>
+      <div class="layer-row" onclick="toggleLayer('drift')">
+        <div class="layer-left">
+          <div class="layer-pip" style="background:var(--warn-2);"></div>
+          <div><div class="layer-name">Wind Drift Vectors</div><div class="layer-hint">ERA5 24h prediction</div></div>
+        </div>
+        <div class="toggle on" id="toggle-drift"></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Session</div>
+      <div class="stats-row">
+        <div class="stat-cell"><div class="stat-value" id="statDetections">0</div><div class="stat-label">Detections</div></div>
+        <div class="stat-cell"><div class="stat-value" id="statArea">0</div><div class="stat-label">Total km²</div></div>
+        <div class="stat-cell"><div class="stat-value" id="statAlerts">0</div><div class="stat-label">Dispatched</div></div>
+        <div class="stat-cell"><div class="stat-value" id="statScans">0</div><div class="stat-label">Scans Run</div></div>
+      </div>
+    </div>
+
+    <div class="detection-archive">
+      <div class="panel-label">Detection Archive</div>
+      <div id="detectionList">
+        <div class="empty-state">No detections yet<br>Upload a SAR scene<br>and run a scan</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel-section">
+      <div class="panel-label">Cursor</div>
+      <div class="coord-display" id="coordDisplay">
+        LAT &mdash;<br>LON &mdash;
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">AOI Bounds</div>
+      <div class="coord-display">
+        <span class="highlight">Niger Delta</span><br>
+        4.0°N – 6.5°N<br>
+        5.0°E – 8.5°E<br>
+        Sentinel-1 IW GRD<br>
+        VV + VH · 10m resolution
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Legend</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--alert-2);opacity:.8;"></div>High confidence (&gt;70%)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--warn-2);opacity:.8;"></div>Medium confidence (50–70%)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--mid);opacity:.6;border:1px dashed var(--mid);"></div>Pipeline corridor</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--vessel-2);opacity:.7;"></div>Documented incident</div>
+      <div class="rule-line" style="margin:4px 0;"></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:rgba(198,18,31,.4);border:1px solid rgba(198,18,31,.6);"></div>Classifier: Oil confirmed</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:rgba(45,106,79,.3);border:1px solid rgba(45,106,79,.5);"></div>Classifier: Look-alike / suppressed</div>
+      <div class="rule-line" style="margin:4px 0;"></div>
+      <div class="legend-item"><div class="legend-icon"><div style="width:16px;height:1px;background:var(--warn-2);"></div></div>Wind drift 24h</div>
+      <div class="rule-line" style="margin:4px 0;"></div>
+      <div class="legend-item"><div class="legend-icon"><span style="font-size:9px;color:var(--confirm-2);">✓</span></div>S2 optical confirmed</div>
+      <div class="legend-item"><div class="legend-icon"><span style="font-size:9px;color:var(--warn-2);">△</span></div>S2 optical inconclusive</div>
+      <div class="legend-item"><div class="legend-icon"><span style="font-size:9px;color:#e05a5a;">✕</span></div>S2 optical unconfirmed</div>
+      <div class="rule-line" style="margin:4px 0;"></div>
+      <div class="legend-item"><div class="legend-icon"><span style="font-size:9px;color:var(--vessel-2);">⊕</span></div>AIS vessel nearby</div>
+      <div class="legend-item"><div class="legend-icon"><span style="font-size:9px;color:#e05a5a;">⊕</span></div>AIS high suspicion (≥6)</div>
+    </div>
+
+    <div class="panel-section" style="flex:1;">
+      <div class="panel-label">Alert Log</div>
+      <div id="alertLog"><div class="empty-state" style="padding:16px 0;">No alerts dispatched</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ALERT MODAL ═══════════════════════════════ -->
+<div class="modal-overlay" id="alertModal">
+  <div class="modal-box modal-box-lg">
+    <button class="modal-close" onclick="closeAlertModal()">&#10005;</button>
+    <div class="modal-title">Alert Dispatch</div>
+    <div class="modal-sub">Configure recipients and dispatch evidence package</div>
+
+    <div class="modal-detection-info" id="modalDetectionInfo"></div>
+    <div class="modal-banner banner-oil"  id="modalClassifierBanner"></div>
+    <div class="modal-banner banner-wind" id="modalWindBanner"></div>
+    <div class="modal-banner banner-s2"   id="modalOpticalBanner"></div>
+    <div class="modal-banner banner-ais"  id="modalAISBanner"></div>
+
+    <div class="field-group">
+      <div class="modal-field-label">Recipient Emails</div>
+      <div class="email-input-row">
+        <input id="emailInput" type="email" placeholder="Add email address..."
+          class="modal-input email-input"
+          onkeydown="if(event.key==='Enter')addEmail()"/>
+        <button onclick="addEmail()" class="btn-primary btn-sm">Add</button>
+      </div>
+      <div id="emailTags" class="email-tags-row"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="modal-field-label">Dispatch Flow</div>
+      <div class="flow-box">
+        <svg id="flowSvg" width="100%" height="190" style="display:block;"></svg>
+      </div>
+    </div>
+
+    <div class="modal-btn-row">
+      <button onclick="closeAlertModal()" class="btn-ghost">Cancel</button>
+      <button onclick="downloadCurrentReport()" class="btn-outline-report">&#8659; Report PDF</button>
+      <button onclick="dispatchAlerts()" id="dispatchBtn" class="btn-danger">Dispatch Alert</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ WATCH ZONE MODAL ═══════════════════════════════ -->
+<div class="modal-overlay" id="watchZoneModal">
+  <div class="modal-box modal-box-md">
+    <button class="modal-close" onclick="closeWatchZoneModal()">&#10005;</button>
+    <div class="modal-title">New Watch Zone</div>
+    <div class="modal-sub">Configure zone for persistent surveillance</div>
+    <div class="field-stack">
+      <div>
+        <div class="modal-field-label">Zone Name</div>
+        <input id="wzName" type="text" placeholder="e.g. Bonga Field North" class="modal-input"/>
+      </div>
+      <div>
+        <div class="modal-field-label">Client / Organisation</div>
+        <input id="wzClient" type="text" placeholder="e.g. NNPC, Amnesty International" class="modal-input"/>
+      </div>
+      <div>
+        <div class="modal-field-label">Priority Level</div>
+        <select id="wzPriority" class="modal-select">
+          <option value="high">High — Critical infrastructure</option>
+          <option value="medium" selected>Medium — Active monitoring</option>
+          <option value="low">Low — Periodic check</option>
+        </select>
+      </div>
+      <div>
+        <div class="modal-field-label">Description (optional)</div>
+        <input id="wzDescription" type="text" placeholder="e.g. Offshore pipeline corridor, Bonga OML 118" class="modal-input"/>
+      </div>
+    </div>
+    <div class="modal-btn-row">
+      <button onclick="closeWatchZoneModal()" class="btn-ghost">Cancel</button>
+      <button onclick="saveWatchZone()" class="btn-primary">Save Zone</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ THUMBNAIL LIGHTBOX ═══════════════════════════════ -->
+<div id="thumbnailModal" class="thumbnail-overlay" onclick="closeThumbnailModal()">
+  <div class="thumbnail-hint">Click anywhere to close</div>
+  <img id="thumbnailModalImg" src="" alt="Optical thumbnail" class="thumbnail-image"/>
+  <div class="thumbnail-caption-wrap">
+    <div id="thumbnailModalCaption" class="thumbnail-caption"></div>
+    <div id="thumbnailModalSubtitle" class="thumbnail-subtitle"></div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

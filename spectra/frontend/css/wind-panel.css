@@ -1,0 +1,38 @@
+/* ── WIND PANEL ── */
+.wind-panel {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+.wind-main-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.wind-speed-big { font-family:var(--sans); font-size:20px; font-weight:700; color:var(--white); line-height:1; }
+.wind-speed-big span { font-size:11px; font-weight:400; color:var(--mid); margin-left:2px; }
+.wind-dir-text { font-family:var(--mono); font-size:9px; color:var(--mid); margin-top:3px; }
+.wind-chips-row { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:7px; }
+.wind-validity-chip, .wind-risk-chip {
+  font-family:var(--mono); font-size:8px; font-weight:500;
+  letter-spacing:0.05em; text-transform:uppercase;
+  padding:2px 6px; border-radius:1px; white-space:nowrap;
+}
+.wv-valid      { background:rgba(45,106,79,0.1); color:var(--confirm-2); border:1px solid rgba(45,106,79,0.25); }
+.wv-borderline { background:rgba(199,123,42,0.1); color:var(--warn-2); border:1px solid rgba(199,123,42,0.25); }
+.wv-too-low,
+.wv-too-high   { background:rgba(198,18,31,0.08); color:#e05a5a; border:1px solid rgba(198,18,31,0.2); }
+.wv-unavailable,
+.wv-error      { background:rgba(255,255,255,0.02); color:var(--text-faint); border:1px solid var(--rule); }
+.wr-low    { background:rgba(45,106,79,0.08); color:var(--confirm-2); border:1px solid rgba(45,106,79,0.2); }
+.wr-medium { background:rgba(199,123,42,0.08); color:var(--warn-2); border:1px solid rgba(199,123,42,0.2); }
+.wr-high   { background:rgba(198,18,31,0.08); color:#e05a5a; border:1px solid rgba(198,18,31,0.2); }
+.wr-unknown{ background:rgba(255,255,255,0.02); color:var(--text-faint); border:1px solid var(--rule); }
+.wind-detail-txt { font-family:var(--mono); font-size:9px; color:var(--text-faint); line-height:1.5; margin-bottom:7px; }
+.wind-drift-section { border-top:1px solid var(--rule); padding-top:7px; margin-top:2px; }
+.wind-drift-label { font-family:var(--mono); font-size:8px; letter-spacing:0.1em; text-transform:uppercase; color:var(--mid); margin-bottom:5px; }
+.wind-drift-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+.drift-cell { text-align:center; background:rgba(255,255,255,0.02); border:1px solid var(--rule); border-radius:1px; padding:5px 4px; }
+.drift-val { display:block; font-family:var(--sans); font-size:13px; font-weight:700; color:var(--warn-2); line-height:1; }
+.drift-lbl { display:block; font-family:var(--mono); font-size:8px; color:var(--mid); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }
+.wind-fetch-time { font-family:var(--mono); font-size:8px; color:var(--text-faint); text-align:right; margin-top:6px; }
+.wind-unavailable-msg { font-family:var(--mono); font-size:9px; color:var(--text-faint); padding:4px 0; line-height:1.6; }
+.wind-unavailable-msg a { color:var(--warn-2); text-decoration:none; }

@@ -1,0 +1,10 @@
+/* ── LEAFLET OVERRIDES ── */
+.leaflet-control-zoom { border: 1px solid var(--rule-2) !important; border-radius: 2px !important; overflow: hidden; }
+.leaflet-control-zoom a { background: var(--ink-2) !important; color: var(--mid) !important; border-bottom: 1px solid var(--rule) !important; width: 28px !important; height: 28px !important; line-height: 28px !important; font-size: 16px !important; }
+.leaflet-control-zoom a:hover { background: var(--ink-3) !important; color: var(--white) !important; }
+.leaflet-popup-content-wrapper { background: var(--ink-2) !important; border: 1px solid var(--rule-2) !important; border-radius: 2px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important; color: var(--text) !important; }
+.leaflet-popup-tip { background: var(--ink-2) !important; }
+.popup-title { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--white); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+.popup-row { font-family: var(--mono); font-size: 10px; color: var(--mid); margin-bottom: 4px; line-height: 1.6; }
+.popup-row strong { color: var(--text); font-weight: 500; }
+.drift-popup { font-family: var(--mono); font-size: 10px; line-height: 1.7; color: var(--text); }
